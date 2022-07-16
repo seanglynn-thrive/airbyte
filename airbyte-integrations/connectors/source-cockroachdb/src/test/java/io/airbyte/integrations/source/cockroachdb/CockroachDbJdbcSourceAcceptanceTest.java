@@ -88,7 +88,7 @@ class CockroachDbJdbcSourceAcceptanceTest extends JdbcSourceAcceptanceTest {
             jdbcConfig.has(JdbcUtils.PASSWORD_KEY) ? jdbcConfig.get(JdbcUtils.PASSWORD_KEY).asText() : null,
             getDriverClass(),
             jdbcConfig.get(JdbcUtils.JDBC_URL_KEY).asText(),
-            JdbcUtils.parseJdbcParameters(jdbcConfig, "connection_properties")));
+            JdbcUtils.parseJdbcParameters(jdbcConfig, JdbcUtils.CONNECTION_PROPERTIES_KEY)));
     database.execute(connection -> connection.createStatement().execute("CREATE DATABASE " + config.get(JdbcUtils.DATABASE_KEY) + ";"));
     super.setup();
   }
