@@ -74,7 +74,7 @@ class CockroachDbJdbcSourceAcceptanceTest extends JdbcSourceAcceptanceTest {
 
     config = Jsons.jsonNode(ImmutableMap.builder()
         .put(JdbcUtils.HOST_KEY, PSQL_DB.getHost())
-        .put("port", PSQL_DB.getFirstMappedPort() - 1)
+        .put(JdbcUtils.PORT_KEY, PSQL_DB.getFirstMappedPort() - 1)
         .put(JdbcUtils.DATABASE_KEY, dbName)
         .put(JdbcUtils.USERNAME_KEY, PSQL_DB.getUsername())
         .put(JdbcUtils.PASSWORD_KEY, PSQL_DB.getPassword())
