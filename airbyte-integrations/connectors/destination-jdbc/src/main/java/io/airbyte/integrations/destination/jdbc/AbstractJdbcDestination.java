@@ -57,7 +57,7 @@ public abstract class AbstractJdbcDestination extends BaseConnector implements D
 
     try {
       final JdbcDatabase database = getDatabase(dataSource);
-      final String outputSchema = namingResolver.getIdentifier(config.get("schema").asText());
+      final String outputSchema = namingResolver.getIdentifier(config.get(JdbcUtils.SCHEMA_KEY).asText());
       AirbyteSentry.executeWithTracing("CreateAndDropTable",
           () -> attemptSQLCreateAndDropTableOperations(outputSchema, database, namingResolver, sqlOperations));
       return new AirbyteConnectionStatus().withStatus(Status.SUCCEEDED);

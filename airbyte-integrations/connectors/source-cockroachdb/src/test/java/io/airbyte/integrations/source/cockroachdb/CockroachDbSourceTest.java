@@ -17,6 +17,7 @@ import io.airbyte.commons.util.MoreIterators;
 import io.airbyte.db.Database;
 import io.airbyte.db.factory.DSLContextFactory;
 import io.airbyte.db.factory.DatabaseDriver;
+import io.airbyte.db.jdbc.JdbcUtils;
 import io.airbyte.protocol.models.AirbyteCatalog;
 import io.airbyte.protocol.models.AirbyteMessage;
 import io.airbyte.protocol.models.AirbyteMessage.Type;
@@ -134,13 +135,13 @@ class CockroachDbSourceTest {
 
   private static DSLContext getDslContext(final JsonNode config) {
     return DSLContextFactory.create(
-        config.get("username").asText(),
-        config.get("password").asText(),
+        config.get(JdbcUtils.USERNAME_KEY).asText(),
+        config.get(JdbcUtils.PASSWORD_KEY).asText(),
         DatabaseDriver.POSTGRESQL.getDriverClassName(),
         String.format(DatabaseDriver.POSTGRESQL.getUrlFormatString(),
             config.get("host").asText(),
             config.get("port").asInt(),
-            config.get("database").asText()),
+            config.get(JdbcUtils.DATABASE_KEY).asText()),
         SQLDialect.POSTGRES);
   }
 
@@ -152,10 +153,10 @@ class CockroachDbSourceTest {
     return Jsons.jsonNode(ImmutableMap.builder()
         .put("host", psqlDb.getHost())
         .put("port", psqlDb.getFirstMappedPort() - 1)
-        .put("database", dbName)
-        .put("username", username)
-        .put("password", psqlDb.getPassword())
-        .put("ssl", false)
+        .put(JdbcUtils.DATABASE_KEY, dbName)
+        .put(JdbcUtils.USERNAME_KEY, username)
+        .put(JdbcUtils.PASSWORD_KEY, psqlDb.getPassword())
+        .put(JdbcUtils.SSL_KEY, false)
         .build());
   }
 

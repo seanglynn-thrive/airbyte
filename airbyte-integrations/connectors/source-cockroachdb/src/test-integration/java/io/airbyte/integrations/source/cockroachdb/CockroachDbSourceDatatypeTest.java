@@ -10,6 +10,7 @@ import io.airbyte.commons.json.Jsons;
 import io.airbyte.db.Database;
 import io.airbyte.db.factory.DSLContextFactory;
 import io.airbyte.db.factory.DatabaseDriver;
+import io.airbyte.db.jdbc.JdbcUtils;
 import io.airbyte.integrations.standardtest.source.AbstractSourceDatabaseTypeTest;
 import io.airbyte.integrations.standardtest.source.TestDataHolder;
 import io.airbyte.integrations.standardtest.source.TestDestinationEnv;
@@ -38,21 +39,21 @@ public class CockroachDbSourceDatatypeTest extends AbstractSourceDatabaseTypeTes
         .put("host", container.getHost())
         // by some reason it return not a port number as exposed and mentioned in logs
         .put("port", container.getFirstMappedPort() - 1)
-        .put("database", container.getDatabaseName())
-        .put("username", container.getUsername())
-        .put("password", container.getPassword())
-        .put("ssl", false)
+        .put(JdbcUtils.DATABASE_KEY, container.getDatabaseName())
+        .put(JdbcUtils.USERNAME_KEY, container.getUsername())
+        .put(JdbcUtils.PASSWORD_KEY, container.getPassword())
+        .put(JdbcUtils.SSL_KEY, false)
         .build());
     LOGGER.warn("PPP:config:" + config);
 
     dslContext = DSLContextFactory.create(
-        config.get("username").asText(),
-        config.get("password").asText(),
+        config.get(JdbcUtils.USERNAME_KEY).asText(),
+        config.get(JdbcUtils.PASSWORD_KEY).asText(),
         DatabaseDriver.POSTGRESQL.getDriverClassName(),
         String.format(DatabaseDriver.POSTGRESQL.getUrlFormatString(),
             config.get("host").asText(),
             config.get("port").asInt(),
-            config.get("database").asText()),
+            config.get(JdbcUtils.DATABASE_KEY).asText()),
         SQLDialect.POSTGRES);
     final Database database = new Database(dslContext);
 
