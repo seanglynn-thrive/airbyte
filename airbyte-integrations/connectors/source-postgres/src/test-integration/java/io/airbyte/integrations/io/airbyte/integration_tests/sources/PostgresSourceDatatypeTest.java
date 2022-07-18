@@ -13,6 +13,7 @@ import io.airbyte.db.factory.DatabaseDriver;
 import io.airbyte.integrations.standardtest.source.AbstractSourceDatabaseTypeTest;
 import io.airbyte.integrations.standardtest.source.TestDataHolder;
 import io.airbyte.integrations.standardtest.source.TestDestinationEnv;
+import io.airbyte.integrations.util.HostPortResolver;
 import io.airbyte.protocol.models.JsonSchemaType;
 import java.sql.SQLException;
 import java.util.Set;
@@ -35,8 +36,8 @@ public class PostgresSourceDatatypeTest extends AbstractSourceDatabaseTypeTest {
         .put("method", "Standard")
         .build());
     config = Jsons.jsonNode(ImmutableMap.builder()
-        .put("host", container.getHost())
-        .put("port", container.getFirstMappedPort())
+        .put("host", HostPortResolver.resolveHost(container))
+        .put("port", HostPortResolver.resolvePort(container))
         .put("database", container.getDatabaseName())
         .put("username", container.getUsername())
         .put("password", container.getPassword())
