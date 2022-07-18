@@ -57,6 +57,7 @@ public class DiscoverCatalogActivityImpl implements DiscoverCatalogActivity {
     this.airbyteVersion = airbyteVersion;
   }
 
+  @Override
   public AirbyteCatalog run(final JobRunConfig jobRunConfig,
                             final IntegrationLauncherConfig launcherConfig,
                             final StandardDiscoverCatalogInput config) {

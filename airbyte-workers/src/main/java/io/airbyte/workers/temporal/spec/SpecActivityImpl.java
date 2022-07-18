@@ -51,6 +51,7 @@ public class SpecActivityImpl implements SpecActivity {
     this.airbyteVersion = airbyteVersion;
   }
 
+  @Override
   public ConnectorSpecification run(final JobRunConfig jobRunConfig, final IntegrationLauncherConfig launcherConfig) {
     final Supplier<JobGetSpecConfig> inputSupplier = () -> new JobGetSpecConfig().withDockerImage(launcherConfig.getDockerImage());
 
