@@ -4,6 +4,10 @@
 
 package io.airbyte.workers.general;
 
+/*
+ * Copyright (c) 2022 Airbyte, Inc., all rights reserved.
+ */
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -39,7 +43,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-public class DefaultDiscoverCatalogWorkerTest {
+class DefaultDiscoverCatalogWorkerTest {
 
   private static final JsonNode CREDENTIALS = Jsons.jsonNode(ImmutableMap.builder().put("apiKey", "123").build());
   private static final StandardDiscoverCatalogInput INPUT = new StandardDiscoverCatalogInput().withConnectionConfiguration(CREDENTIALS);
@@ -61,7 +65,7 @@ public class DefaultDiscoverCatalogWorkerTest {
   private AirbyteStreamFactory streamFactory;
 
   @BeforeEach
-  public void setup() throws Exception {
+  void setup() throws Exception {
     workerConfigs = new WorkerConfigs(new EnvConfigs());
     jobRoot = Files.createTempDirectory(Files.createDirectories(TEST_ROOT), "");
     integrationLauncher = mock(IntegrationLauncher.class, RETURNS_DEEP_STUBS);
@@ -79,7 +83,7 @@ public class DefaultDiscoverCatalogWorkerTest {
 
   @SuppressWarnings("BusyWait")
   @Test
-  public void testDiscoverSchema() throws Exception {
+  void testDiscoverSchema() throws Exception {
     final DefaultDiscoverCatalogWorker worker = new DefaultDiscoverCatalogWorker(workerConfigs, integrationLauncher, streamFactory);
     final AirbyteCatalog output = worker.run(INPUT, jobRoot);
 
@@ -96,7 +100,7 @@ public class DefaultDiscoverCatalogWorkerTest {
 
   @SuppressWarnings("BusyWait")
   @Test
-  public void testDiscoverSchemaProcessFail() throws Exception {
+  void testDiscoverSchemaProcessFail() throws Exception {
     when(process.exitValue()).thenReturn(1);
 
     final DefaultDiscoverCatalogWorker worker = new DefaultDiscoverCatalogWorker(workerConfigs, integrationLauncher, streamFactory);
@@ -112,7 +116,7 @@ public class DefaultDiscoverCatalogWorkerTest {
   }
 
   @Test
-  public void testDiscoverSchemaException() throws WorkerException {
+  void testDiscoverSchemaException() throws WorkerException {
     when(integrationLauncher.discover(jobRoot, WorkerConstants.SOURCE_CONFIG_JSON_FILENAME, Jsons.serialize(CREDENTIALS)))
         .thenThrow(new RuntimeException());
 
@@ -121,7 +125,7 @@ public class DefaultDiscoverCatalogWorkerTest {
   }
 
   @Test
-  public void testCancel() throws WorkerException {
+  void testCancel() throws WorkerException {
     final DefaultDiscoverCatalogWorker worker = new DefaultDiscoverCatalogWorker(workerConfigs, integrationLauncher, streamFactory);
     worker.run(INPUT, jobRoot);
 
