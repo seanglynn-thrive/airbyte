@@ -63,3 +63,164 @@ If you want to contribute changes to `source-zoom`, here's how you can do that:
 6. Pat yourself on the back for being an awesome contributor.
 7. Someone from Airbyte will take a look at your PR and iterate with you to merge it into master.
 8. Once your PR is merged, the new version of the connector will be automatically published to Docker Hub and our connector registry.
+
+
+## Streams 
+
+#### Meeting Report Streams
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           report_meetings                                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  STEP 1: GET /users                                                             │
+│  ┌─────────────────────┐                                                        │
+│  │  Fetch all users    │ → Returns: [{ id: "user1" }, { id: "user2" }, ...]    │
+│  └──────────┬──────────┘                                                        │
+│             │                                                                   │
+│             ▼  (for each user.id)                                               │
+│  STEP 2: GET /report/users/{userId}/meetings?from=YYYY-MM-DD&to=YYYY-MM-DD     │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch historical meetings      │ → Returns: [{ id: "mtg1" }, ...]        │
+│  │  (up to 6 months back)          │                                            │
+│  └──────────┬──────────────────────┘                                            │
+│             │                                                                   │
+│             ▼  (for each meeting.id)                                          │
+│  STEP 3: GET /report/meetings/{meetingid}                                     │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch detailed meeting report  │ → OUTPUT: Meeting report data             │
+│  └─────────────────────────────────┘                                            │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                       report_meeting_participants                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  STEP 1: GET /users                                                             │
+│  ┌─────────────────────┐                                                        │
+│  │  Fetch all users    │ → Returns: [{ id: "user1" }, { id: "user2" }, ...]    │
+│  └──────────┬──────────┘                                                        │
+│             │                                                                   │
+│             ▼  (for each user.id)                                               │
+│  STEP 2: GET /report/users/{userId}/meetings?from=YYYY-MM-DD&to=YYYY-MM-DD     │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch historical meetings      │ → Returns: [{ id: "mtg1" }, ...]        │
+│  └──────────┬──────────────────────┘                                            │
+│             │                                                                   │
+│             ▼  (for each meeting.id)                                          │
+│  STEP 3: GET /report/meetings/{meetingid}/participants                        │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch meeting participants     │ → OUTPUT: Participant records             │
+│  └─────────────────────────────────┘                                            │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                       past_meeting_participants                                  │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  STEP 1: GET /users                                                             │
+│  ┌─────────────────────┐                                                        │
+│  │  Fetch all users    │ → Returns: [{ id: "user1" }, { id: "user2" }, ...]    │
+│  └──────────┬──────────┘                                                        │
+│             │                                                                   │
+│             ▼  (for each user.id)                                               │
+│  STEP 2: GET /report/users/{userId}/meetings?from=YYYY-MM-DD&to=YYYY-MM-DD     │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch historical meetings      │ → Returns: [{ id: "mtg1" }, ...]          │
+│  └──────────┬──────────────────────┘                                            │
+│             │                                                                   │
+│             ▼  (for each meeting.id)                                            │
+│  STEP 3: GET /past_meetings/{meetingId}/participants                            │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch past meeting participants│ → OUTPUT: Participant records             │
+│  └─────────────────────────────────┘                                            │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Webinar Report Streams
+
+> **Note:** Zoom's API does not provide a `/report/users/{userId}/webinars` endpoint for historical
+> webinar data. These streams use `/users/{userId}/webinars` which only returns **recent/upcoming**
+> webinars, not historical ones. The `report_from_date` and `report_to_date` config parameters do
+> NOT apply to webinar streams.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           report_webinars                                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  STEP 1: GET /users                                                             │
+│  ┌─────────────────────┐                                                        │
+│  │  Fetch all users    │ → Returns: [{ id: "user1" }, { id: "user2" }, ...]    │
+│  └──────────┬──────────┘                                                        │
+│             │                                                                   │
+│             ▼  (for each user.id)                                               │
+│  STEP 2: GET /users/{userId}/webinars                                           │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch recent/upcoming webinars │ → Returns: [{ id: "web1" }, ...]          │
+│  │  (NOT historical)               │                                            │
+│  └──────────┬──────────────────────┘                                            │
+│             │                                                                   │
+│             ▼  (for each webinar.id)                                            │
+│  STEP 3: GET /report/webinars/{webinarId}                                       │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch detailed webinar report  │ → OUTPUT: Webinar report data             │
+│  └─────────────────────────────────┘                                            │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                       report_webinar_participants                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  STEP 1: GET /users                                                             │
+│  ┌─────────────────────┐                                                        │
+│  │  Fetch all users    │ → Returns: [{ id: "user1" }, { id: "user2" }, ...]    │
+│  └──────────┬──────────┘                                                        │
+│             │                                                                   │
+│             ▼  (for each user.id)                                               │
+│  STEP 2: GET /users/{userId}/webinars                                           │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch recent/upcoming webinars │ → Returns: [{ id: "web1" }, ...]          │
+│  │  (NOT historical)               │                                            │
+│  └──────────┬──────────────────────┘                                            │
+│             │                                                                   │
+│             ▼  (for each webinar.id)                                            │
+│  STEP 3: GET /report/webinars/{webinarId}/participants                          │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch webinar participants     │ → OUTPUT: Participant records             │
+│  └─────────────────────────────────┘                                            │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                       past_webinar_participants                                  │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  STEP 1: GET /users                                                             │
+│  ┌─────────────────────┐                                                        │
+│  │  Fetch all users    │ → Returns: [{ id: "user1" }, { id: "user2" }, ...]    │
+│  └──────────┬──────────┘                                                        │
+│             │                                                                   │
+│             ▼  (for each user.id)                                               │
+│  STEP 2: GET /users/{userId}/webinars                                           │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch recent/upcoming webinars │ → Returns: [{ id: "web1" }, ...]          │
+│  │  (NOT historical)               │                                            │
+│  └──────────┬──────────────────────┘                                            │
+│             │                                                                   │
+│             ▼  (for each webinar.id)                                            │
+│  STEP 3: GET /past_webinars/{webinarId}/participants                            │
+│  ┌─────────────────────────────────┐                                            │
+│  │  Fetch past webinar participants│ → OUTPUT: Participant records             │
+│  └─────────────────────────────────┘                                            │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
