@@ -4883,7 +4883,7 @@ definitions:
                             - string
                   parent_key: "id"
                   partition_field: "parent_id"
-          parent_key: "uuid"
+          parent_key: "id"
           partition_field: "parent_id"
     transformations:
     - type: AddFields
@@ -5726,7 +5726,7 @@ definitions:
                             - string
                   parent_key: "id"
                   partition_field: "parent_id"
-          parent_key: "uuid"
+          parent_key: "id"
           partition_field: "parent_id"
     transformations:
     - type: AddFields
@@ -5813,7 +5813,10 @@ definitions:
                   client_secret: "{{ config['client_secret'] }}"
                   authorization_endpoint: "{{ config['authorization_endpoint'] }}"
                   grant_type: "account_credentials"
-                path: "/users/{{ stream_partition.parent_id }}/meetings"
+                path: "/report/users/{{ stream_partition.parent_id }}/meetings"
+                request_parameters:
+                  from: "{{ config['report_from_date'] }}"
+                  to: "{{ config['report_to_date'] }}"
               paginator:
                 type: DefaultPaginator
                 pagination_strategy:
@@ -6145,7 +6148,10 @@ definitions:
                   client_secret: "{{ config['client_secret'] }}"
                   authorization_endpoint: "{{ config['authorization_endpoint'] }}"
                   grant_type: "account_credentials"
-                path: "/users/{{ stream_partition.parent_id }}/meetings"
+                path: "/report/users/{{ stream_partition.parent_id }}/meetings"
+                request_parameters:
+                  from: "{{ config['report_from_date'] }}"
+                  to: "{{ config['report_to_date'] }}"
               paginator:
                 type: DefaultPaginator
                 pagination_strategy:
@@ -6443,7 +6449,10 @@ definitions:
                   client_secret: "{{ config['client_secret'] }}"
                   authorization_endpoint: "{{ config['authorization_endpoint'] }}"
                   grant_type: "account_credentials"
-                path: "/users/{{ stream_partition.parent_id }}/webinars"
+                path: "/report/users/{{ stream_partition.parent_id }}/webinars"
+                request_parameters:
+                  from: "{{ config['report_from_date'] }}"
+                  to: "{{ config['report_to_date'] }}"
                 error_handler:
                   type: CompositeErrorHandler
                   error_handlers:
@@ -6629,7 +6638,7 @@ definitions:
                             - string
                   parent_key: "id"
                   partition_field: "parent_id"
-          parent_key: "uuid"
+          parent_key: "id"
           partition_field: "parent_id"
     transformations:
     - type: AddFields
@@ -6785,7 +6794,10 @@ definitions:
                   client_secret: "{{ config['client_secret'] }}"
                   authorization_endpoint: "{{ config['authorization_endpoint'] }}"
                   grant_type: "account_credentials"
-                path: "/users/{{ stream_partition.parent_id }}/webinars"
+                path: "/report/users/{{ stream_partition.parent_id }}/webinars"
+                request_parameters:
+                  from: "{{ config['report_from_date'] }}"
+                  to: "{{ config['report_to_date'] }}"
                 error_handler:
                   type: CompositeErrorHandler
                   error_handlers:
@@ -6971,7 +6983,7 @@ definitions:
                             - string
                   parent_key: "id"
                   partition_field: "parent_id"
-          parent_key: "uuid"
+          parent_key: "id"
           partition_field: "parent_id"
     transformations:
     - type: AddFields
@@ -14205,7 +14217,10 @@ streams:
                 authorization_endpoint: "{{ config['authorization_endpoint'] }}"
                 grant_type: "account_credentials"
                 type: CustomAuthenticator
-              path: "/users/{{ stream_partition.parent_id }}/webinars"
+              path: "/report/users/{{ stream_partition.parent_id }}/webinars"
+              request_parameters:
+                from: "{{ config['report_from_date'] }}"
+                to: "{{ config['report_to_date'] }}"
               error_handler:
                 type: CompositeErrorHandler
                 error_handlers:
@@ -14552,7 +14567,10 @@ streams:
                 authorization_endpoint: "{{ config['authorization_endpoint'] }}"
                 grant_type: "account_credentials"
                 type: CustomAuthenticator
-              path: "/users/{{ stream_partition.parent_id }}/meetings"
+              path: "/report/users/{{ stream_partition.parent_id }}/meetings"
+              request_parameters:
+                from: "{{ config['report_from_date'] }}"
+                to: "{{ config['report_to_date'] }}"
               error_handler:
                 type: CompositeErrorHandler
                 error_handlers:
@@ -14874,3 +14892,17 @@ spec:
         type: string
         order: 3
         default: "https://zoom.us/oauth/token"
+      report_from_date:
+        type: string
+        order: 4
+        description: 'Start date for historical meeting/webinar reports (YYYY-MM-DD). Maximum 6 months ago. Required for report streams.'
+        pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        examples:
+          - "2024-06-01"
+      report_to_date:
+        type: string
+        order: 5
+        description: 'End date for historical meeting/webinar reports (YYYY-MM-DD). Must be within 1 month of from_date. Required for report streams.'
+        pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        examples:
+          - "2024-06-30"
