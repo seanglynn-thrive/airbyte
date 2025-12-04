@@ -11,12 +11,13 @@ from typing import Iterable, List, MutableMapping, Set, Union
 import pytest
 from yaml import load
 
+
 try:
     from yaml import CLoader as Loader
 except ImportError:
     from yaml import Loader
 
-from airbyte_cdk.models import (
+from airbyte_protocol.models import (
     AirbyteMessage,
     AirbyteStream,
     ConfiguredAirbyteCatalog,

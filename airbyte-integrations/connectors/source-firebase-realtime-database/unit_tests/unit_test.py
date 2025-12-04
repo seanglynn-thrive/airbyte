@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022 Airbyte, Inc., all rights reserved.
+# Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
 
 import string
@@ -35,7 +35,6 @@ from source_firebase_realtime_database.source import SourceFirebaseRealtimeDatab
     ],
 )
 def test_stream_name_from(config, stream_name):
-
     actual = SourceFirebaseRealtimeDatabase.stream_name_from(config)
     expected = stream_name
 

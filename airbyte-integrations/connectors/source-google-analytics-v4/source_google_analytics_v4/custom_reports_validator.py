@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Union
 from pydantic import BaseModel, Field, ValidationError, validator
 from pydantic.class_validators import root_validator
 
+
 ERROR_MSG_MISSING_SEGMENT_DIMENSION = "errors: `ga:segment` is required"
 
 
@@ -37,7 +38,6 @@ class Model(BaseModel):
     def check_segment_included_in_dimension(cls, values):
         dimensions = values.get("dimensions")
         segments = values.get("segments")
-        print(segments, dimensions)
         if segments and "ga:segment" not in dimensions:
             raise ValueError(ERROR_MSG_MISSING_SEGMENT_DIMENSION)
         return values
@@ -100,7 +100,6 @@ class Explainer:
 
 @dataclass
 class CustomReportsValidator:
-
     custom_reports: Union[List[Dict], Dict] = Field(default_factory=list)
 
     def __post_init__(self):
@@ -109,7 +108,6 @@ class CustomReportsValidator:
         self.explainer: Explainer = Explainer()
 
     def validate(self):
-
         # local import of airbyte_cdk dependencies
         from airbyte_cdk.models import FailureType
         from airbyte_cdk.utils.traced_exception import AirbyteTracedException

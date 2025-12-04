@@ -81,13 +81,20 @@ The Marketo source connector supports the following[ sync modes](https://docs.ai
 
 This connector can be used to sync the following tables from Marketo:
 
-- **activities_X** where X is an activity type contains information about lead activities of the type X. For example, activities_send_email contains information about lead activities related to the activity type `send_email`. See the [Marketo docs](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Activities/getLeadActivitiesUsingGET) for a detailed explanation of what each column means.
-- **activity_types.** Contains metadata about activity types. See the [Marketo docs](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Activities/getAllActivityTypesUsingGET) for a detailed explanation of columns.
-- **campaigns.** Contains info about your Marketo campaigns. [Marketo docs](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Campaigns/getCampaignsUsingGET).
-- **leads.** Contains info about your Marketo leads. [Marketo docs](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Leads/getLeadByIdUsingGET).
-- **lists.** Contains info about your Marketo static lists. [Marketo docs](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Static_Lists/getListByIdUsingGET).
-- **programs.** Contains info about your Marketo programs. [Marketo docs](https://developers.marketo.com/rest-api/endpoint-reference/asset-endpoint-reference/#!/Programs/browseProgramsUsingGET).
-- **segmentations.** Contains info about your Marketo programs. [Marketo docs](https://developers.marketo.com/rest-api/endpoint-reference/asset-endpoint-reference/#!/Segments/getSegmentationUsingGET).
+- **Activities_X** where X is an activity type contains information about lead activities of the type X. For example, activities_send_email contains information about lead activities related to the activity type `send_email`. See the [Marketo docs](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Activities/getLeadActivitiesUsingGET) for a detailed explanation of what each column means.
+- **Activity types** Contains metadata about activity types. See the [Marketo docs](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Activities/getAllActivityTypesUsingGET) for a detailed explanation of columns.
+- **[Campaigns](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Campaigns/getCampaignsUsingGET)**: Contains info about your Marketo campaigns.
+- **[Leads](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Leads/getLeadByIdUsingGET)**: Contains info about your Marketo leads.
+
+:::caution
+
+Available fields are limited by what is presented in the static schema.
+
+:::
+
+- **[Lists](https://developers.marketo.com/rest-api/endpoint-reference/lead-database-endpoint-reference/#!/Static_Lists/getListByIdUsingGET)**: Contains info about your Marketo static lists.
+- **[Programs](https://developers.marketo.com/rest-api/endpoint-reference/asset-endpoint-reference/#!/Programs/browseProgramsUsingGET)**: Contains info about your Marketo programs.
+- **[Segmentations](https://developers.marketo.com/rest-api/endpoint-reference/asset-endpoint-reference/#!/Segments/getSegmentationUsingGET)**: Contains info about your Marketo programs.
 
 ## Performance considerations
 
@@ -109,8 +116,59 @@ If the 50,000 limit is too stringent, contact Marketo support for a quota increa
 
 ## Changelog
 
+<details>
+  <summary>Expand to review</summary>
+
 | Version  | Date       | Pull Request                                             | Subject                                                                                          |
-| :------- | :--------- | :------------------------------------------------------- | :----------------------------------------------------------------------------------------------- |
+|:---------|:-----------|:---------------------------------------------------------|:-------------------------------------------------------------------------------------------------|
+| 1.4.38 | 2025-10-21 | [68475](https://github.com/airbytehq/airbyte/pull/68475) | Update dependencies |
+| 1.4.37 | 2025-10-14 | [67858](https://github.com/airbytehq/airbyte/pull/67858) | Update dependencies |
+| 1.4.36 | 2025-10-07 | [67394](https://github.com/airbytehq/airbyte/pull/67394) | Update dependencies |
+| 1.4.35 | 2025-09-30 | [66352](https://github.com/airbytehq/airbyte/pull/66352) | Update dependencies |
+| 1.4.34 | 2025-09-09 | [65855](https://github.com/airbytehq/airbyte/pull/65855) | Update dependencies |
+| 1.4.33 | 2025-08-23 | [65168](https://github.com/airbytehq/airbyte/pull/65168) | Update dependencies |
+| 1.4.32 | 2025-08-16 | [64988](https://github.com/airbytehq/airbyte/pull/64988) | Update dependencies |
+| 1.4.31 | 2025-08-09 | [64729](https://github.com/airbytehq/airbyte/pull/64729) | Update dependencies |
+| 1.4.30 | 2025-08-02 | [64262](https://github.com/airbytehq/airbyte/pull/64262) | Update dependencies |
+| 1.4.29 | 2025-07-26 | [63912](https://github.com/airbytehq/airbyte/pull/63912) | Update dependencies |
+| 1.4.28 | 2025-07-12 | [63152](https://github.com/airbytehq/airbyte/pull/63152) | Update dependencies |
+| 1.4.27 | 2025-07-05 | [61142](https://github.com/airbytehq/airbyte/pull/61142) | Update dependencies |
+| 1.4.26 | 2025-05-28 | [60823](https://github.com/airbytehq/airbyte/pull/60823) | Fix Attribute Errors on `Leads` stream |
+| 1.4.25 | 2025-05-24 | [60693](https://github.com/airbytehq/airbyte/pull/60693) | Update dependencies |
+| 1.4.24 | 2025-05-10 | [59770](https://github.com/airbytehq/airbyte/pull/59770) | Update dependencies |
+| 1.4.23 | 2025-05-03 | [58788](https://github.com/airbytehq/airbyte/pull/58788) | Update dependencies |
+| 1.4.22 | 2025-04-12 | [57702](https://github.com/airbytehq/airbyte/pull/57702) | Update dependencies |
+| 1.4.21 | 2025-04-05 | [57071](https://github.com/airbytehq/airbyte/pull/57071) | Update dependencies |
+| 1.4.20 | 2025-03-29 | [56674](https://github.com/airbytehq/airbyte/pull/56674) | Update dependencies |
+| 1.4.19 | 2025-03-22 | [56016](https://github.com/airbytehq/airbyte/pull/56016) | Update dependencies |
+| 1.4.18 | 2025-03-08 | [55426](https://github.com/airbytehq/airbyte/pull/55426) | Update dependencies |
+| 1.4.17 | 2025-03-01 | [54761](https://github.com/airbytehq/airbyte/pull/54761) | Update dependencies |
+| 1.4.16 | 2025-02-22 | [54321](https://github.com/airbytehq/airbyte/pull/54321) | Update dependencies |
+| 1.4.15 | 2025-02-15 | [53790](https://github.com/airbytehq/airbyte/pull/53790) | Update dependencies |
+| 1.4.14 | 2025-02-01 | [52711](https://github.com/airbytehq/airbyte/pull/52711) | Update dependencies |
+| 1.4.13 | 2025-01-25 | [52278](https://github.com/airbytehq/airbyte/pull/52278) | Update dependencies |
+| 1.4.12 | 2025-01-11 | [51165](https://github.com/airbytehq/airbyte/pull/51165) | Update dependencies |
+| 1.4.11 | 2025-01-04 | [50890](https://github.com/airbytehq/airbyte/pull/50890) | Update dependencies |
+| 1.4.10 | 2024-12-28 | [50655](https://github.com/airbytehq/airbyte/pull/50655) | Update dependencies |
+| 1.4.9 | 2024-12-21 | [43736](https://github.com/airbytehq/airbyte/pull/43736) | Starting with this version, the Docker image is now rootless. Please note that this and future versions will not be compatible with Airbyte versions earlier than 0.64 |
+| 1.4.8 | 2024-12-20 | [49972](https://github.com/airbytehq/airbyte/pull/49972) | Pin CDK due to breaking changes in newer versions. |
+| 1.4.7 | 2024-07-06 | [40629](https://github.com/airbytehq/airbyte/pull/40629) | Update dependencies |
+| 1.4.6 | 2024-06-26 | [40530](https://github.com/airbytehq/airbyte/pull/40530) | Update dependencies |
+| 1.4.5 | 2024-06-25 | [40318](https://github.com/airbytehq/airbyte/pull/40318) | Update dependencies |
+| 1.4.4 | 2024-06-23 | [40001](https://github.com/airbytehq/airbyte/pull/40001) | Update dependencies |
+| `1.4.3`  | 2024-06-18 | [39549](https://github.com/airbytehq/airbyte/pull/39549) | Refactor: use `client_side_incremental` feature                                                  |
+| `1.4.2`  | 2024-06-06 | [39297](https://github.com/airbytehq/airbyte/pull/39297) | [autopull] Upgrade base image to v1.2.2                                                          |
+| `1.4.1`  | 2024-05-23 | [38631](https://github.com/airbytehq/airbyte/pull/38631) | Update deprecated authenticator package                                                          |
+| `1.4.0`  | 2024-04-15 | [36854](https://github.com/airbytehq/airbyte/pull/36854) | Migrate to low-code                                                                              |
+| `1.3.2`  | 2024-04-19 | [36650](https://github.com/airbytehq/airbyte/pull/36650) | Updating to 0.80.0 CDK                                                                           |
+| `1.3.1`  | 2024-04-12 | [36650](https://github.com/airbytehq/airbyte/pull/36650) | schema descriptions                                                                              |
+| `1.3.0`  | 2024-03-19 | [36267](https://github.com/airbytehq/airbyte/pull/36267) | Pin airbyte-cdk version to `^0`                                                                  |
+| `1.2.6`  | 2024-02-09 | [35078](https://github.com/airbytehq/airbyte/pull/35078) | Manage dependencies with Poetry.                                                                 |
+| `1.2.5`  | 2024-01-15 | [34246](https://github.com/airbytehq/airbyte/pull/34246) | prepare for airbyte-lib                                                                          |
+| `1.2.4`  | 2024-01-08 | [33999](https://github.com/airbytehq/airbyte/pull/33999) | Fix for `Export daily quota exceeded`                                                            |
+| `1.2.3`  | 2023-08-02 | [28999](https://github.com/airbytehq/airbyte/pull/28999) | Fix for ` _csv.Error: line contains NUL`                                                         |
+| `1.2.2`  | 2023-10-19 | [31599](https://github.com/airbytehq/airbyte/pull/31599) | Base image migration: remove Dockerfile and use the python-connector-base image                  |
+| `1.2.1`  | 2023-09-18 | [30533](https://github.com/airbytehq/airbyte/pull/30533) | Fix `json_schema` for stream `Leads`                                                             |
 | `1.2.0`  | 2023-06-26 | [27726](https://github.com/airbytehq/airbyte/pull/27726) | License Update: Elv2                                                                             |
 | `1.1.0`  | 2023-04-18 | [23956](https://github.com/airbytehq/airbyte/pull/23956) | Add `Segmentations` Stream                                                                       |
 | `1.0.4`  | 2023-04-25 | [25481](https://github.com/airbytehq/airbyte/pull/25481) | Minor fix for bug caused by `<=` producing additional API call when there is a single date slice |
@@ -130,3 +188,5 @@ If the 50,000 limit is too stringent, contact Marketo support for a quota increa
 | `0.1.2`  | 2021-12-03 | [8483](https://github.com/airbytehq/airbyte/pull/8483)   | Improve field conversion to conform schema                                                       |
 | `0.1.1`  | 2021-11-29 | [0000](https://github.com/airbytehq/airbyte/pull/0000)   | Fix timestamp value format issue                                                                 |
 | `0.1.0`  | 2021-09-06 | [5863](https://github.com/airbytehq/airbyte/pull/5863)   | Release Marketo CDK Connector                                                                    |
+
+</details>

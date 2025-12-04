@@ -3,11 +3,8 @@
 #
 
 
-import sys
+from source_shopify.run import run
 
-from airbyte_cdk.entrypoint import launch
-from source_shopify import SourceShopify
 
 if __name__ == "__main__":
-    source = SourceShopify()
-    launch(source, sys.argv[1:])
+    run()

@@ -17,7 +17,7 @@ import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.airbyte.db.util.SSLCertificateUtils;
+import io.airbyte.cdk.db.util.SSLCertificateUtils;
 import io.airbyte.protocol.models.v0.AirbyteRecordMessage;
 import jakarta.json.JsonValue;
 import java.io.IOException;
@@ -58,7 +58,12 @@ public class ElasticsearchConnection {
 
     // Create the low-level client
     httpHost = HttpHost.create(config.getEndpoint());
-    final RestClientBuilder builder = RestClient.builder(httpHost);
+    final RestClientBuilder builder;
+    if (config.getPathPrefix() != null) {
+      builder = RestClient.builder(httpHost).setPathPrefix(config.getPathPrefix());
+    } else {
+      builder = RestClient.builder(httpHost);
+    }
 
     // Set custom user's certificate if provided
     if (config.getCaCertificate() != null && !config.getCaCertificate().isEmpty()) {

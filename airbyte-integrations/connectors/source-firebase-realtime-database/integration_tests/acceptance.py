@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022 Airbyte, Inc., all rights reserved.
+# Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
 
 import json
@@ -9,6 +9,7 @@ from pathlib import Path
 
 import docker
 import pytest
+
 
 pytest_plugins = ("source_acceptance_test.plugin",)
 

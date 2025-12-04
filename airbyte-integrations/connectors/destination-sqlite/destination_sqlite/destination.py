@@ -4,6 +4,7 @@
 
 import datetime
 import json
+import logging
 import os
 import sqlite3
 import uuid
@@ -11,7 +12,6 @@ from asyncio.log import logger
 from collections import defaultdict
 from typing import Any, Iterable, Mapping
 
-from airbyte_cdk import AirbyteLogger
 from airbyte_cdk.destinations import Destination
 from airbyte_cdk.models import AirbyteConnectionStatus, AirbyteMessage, ConfiguredAirbyteCatalog, DestinationSyncMode, Status, Type
 
@@ -37,7 +37,6 @@ class DestinationSqlite(Destination):
     def write(
         self, config: Mapping[str, Any], configured_catalog: ConfiguredAirbyteCatalog, input_messages: Iterable[AirbyteMessage]
     ) -> Iterable[AirbyteMessage]:
-
         """
         Reads the input stream of messages, config, and catalog to write data to the destination.
 
@@ -53,7 +52,9 @@ class DestinationSqlite(Destination):
         :return: Iterable of AirbyteStateMessages wrapped in AirbyteMessage structs
         """
         streams = {s.stream.name for s in configured_catalog.streams}
-        path = config.get("destination_path")
+        path = config.get("destination_path", "")
+        if path is None:
+            path = ""
         path = self._get_destination_path(path)
         con = sqlite3.connect(path)
         with con:
@@ -65,9 +66,7 @@ class DestinationSqlite(Destination):
                     # delete the tables
                     query = """
                     DROP TABLE IF EXISTS {}
-                    """.format(
-                        table_name
-                    )
+                    """.format(table_name)
                     con.execute(query)
                 # create the table if needed
                 query = """
@@ -76,9 +75,7 @@ class DestinationSqlite(Destination):
                     _airbyte_emitted_at TEXT,
                     _airbyte_data TEXT
                 )
-                """.format(
-                    table_name=table_name
-                )
+                """.format(table_name=table_name)
                 con.execute(query)
 
             buffer = defaultdict(list)
@@ -87,13 +84,10 @@ class DestinationSqlite(Destination):
                 if message.type == Type.STATE:
                     # flush the buffer
                     for stream_name in buffer.keys():
-
                         query = """
                         INSERT INTO {table_name}
                         VALUES (?,?,?)
-                        """.format(
-                            table_name=f"_airbyte_raw_{stream_name}"
-                        )
+                        """.format(table_name=f"_airbyte_raw_{stream_name}")
 
                         con.executemany(query, buffer[stream_name])
 
@@ -113,19 +107,16 @@ class DestinationSqlite(Destination):
 
             # flush any remaining messages
             for stream_name in buffer.keys():
-
                 query = """
                 INSERT INTO {table_name}
                 VALUES (?,?,?)
-                """.format(
-                    table_name=f"_airbyte_raw_{stream_name}"
-                )
+                """.format(table_name=f"_airbyte_raw_{stream_name}")
 
                 con.executemany(query, buffer[stream_name])
 
             con.commit()
 
-    def check(self, logger: AirbyteLogger, config: Mapping[str, Any]) -> AirbyteConnectionStatus:
+    def check(self, logger: logging.Logger, config: Mapping[str, Any]) -> AirbyteConnectionStatus:
         """
         Tests if the input configuration can be used to successfully connect to the destination with the needed permissions
             e.g: if a provided API token or password can be used to connect and write to the destination.
@@ -139,7 +130,9 @@ class DestinationSqlite(Destination):
         """
         try:
             # parse the destination path
-            path = config.get("destination_path")
+            path = config.get("destination_path", "")
+            if path is None:
+                path = ""
             path = self._get_destination_path(path)
 
             os.makedirs(os.path.dirname(path), exist_ok=True)

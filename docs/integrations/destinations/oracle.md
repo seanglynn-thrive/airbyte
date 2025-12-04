@@ -2,15 +2,15 @@
 
 ## Features
 
-| Feature                       | Supported?\(Yes/No\) | Notes                                                                 |
-| :---------------------------- | :------------------- | :-------------------------------------------------------------------- |
-| Full Refresh Sync             | Yes                  |                                                                       |
-| Incremental - Append Sync     | Yes                  |                                                                       |
-| Incremental - Deduped History | Yes                  |                                                                       |
-| Namespaces                    | Yes                  |                                                                       |
-| Basic Normalization           | Yes                  | Doesn't support for nested json yet                                   |
-| SSH Tunnel Connection         | Yes                  |                                                                       |
-| Encryption                    | Yes                  | Support Native Network Encryption (NNE) as well as TLS using SSL cert |
+| Feature                        | Supported?\(Yes/No\) | Notes                                                                 |
+| :----------------------------- | :------------------- | :-------------------------------------------------------------------- |
+| Full Refresh Sync              | Yes                  |                                                                       |
+| Incremental - Append Sync      | Yes                  |                                                                       |
+| Incremental - Append + Deduped | Yes                  |                                                                       |
+| Namespaces                     | Yes                  |                                                                       |
+| Basic Normalization            | Yes                  | Doesn't support for nested json yet                                   |
+| SSH Tunnel Connection          | Yes                  |                                                                       |
+| Encryption                     | Yes                  | Support Native Network Encryption (NNE) as well as TLS using SSL cert |
 
 ## Output Schema
 
@@ -26,14 +26,13 @@ Enabling normalization will also create normalized, strongly typed tables.
 
 The Oracle connector is currently in Alpha on Airbyte Cloud. Only TLS encrypted connections to your DB can be made from Airbyte Cloud. Other than that, follow the open-source instructions below.
 
-## Getting Started \(Airbyte Open-Source\)
+## Getting Started \(Airbyte Open Source\)
 
 #### Requirements
 
 To use the Oracle destination, you'll need:
 
-- An Oracle server version 18 or above
-- It's possible to use Oracle 12+ but you need to configure the table name length to 120 chars.
+- An Oracle server version 21 or above
 
 #### Network Access
 
@@ -86,12 +85,16 @@ Airbyte has the ability to connect to the Oracle source with 3 network connectiv
 1. `Unencrypted` the connection will be made using the TCP protocol. In this case, all data over the network will be transmitted in unencrypted form.
 2. `Native network encryption` gives you the ability to encrypt database connections, without the configuration overhead of TCP / IP and SSL / TLS and without the need to open and listen on different ports. In this case, the _SQLNET.ENCRYPTION_CLIENT_
    option will always be set as _REQUIRED_ by default: The client or server will only accept encrypted traffic, but the user has the opportunity to choose an `Encryption algorithm` according to the security policies he needs.
-3. `TLS Encrypted` (verify certificate) - if this option is selected, data transfer will be transfered using the TLS protocol, taking into account the handshake procedure and certificate verification. To use this option, insert the content of the certificate issued by the server into the `SSL PEM file` field
+3. `TLS Encrypted` (verify certificate) - if this option is selected, data transfer will be transferred using the TLS protocol, taking into account the handshake procedure and certificate verification. To use this option, insert the content of the certificate issued by the server into the `SSL PEM file` field
 
 ## Changelog
 
+<details>
+  <summary>Expand to review</summary>
+
 | Version     | Date       | Pull Request                                               | Subject                                                                                             |
 | :---------- | :--------- | :--------------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
+| 1.0.0       | 2024-04-11 | [\#36048](https://github.com/airbytehq/airbyte/pull/36048) | Removes Normalization, updates to V2 Raw Table Format                                               |
 | 0.2.0       | 2023-06-27 | [\#27781](https://github.com/airbytehq/airbyte/pull/27781) | License Update: Elv2                                                                                |
 | 0.1.19      | 2022-07-26 | [\#10719](https://github.com/airbytehq/airbyte/pull/)      | Destination Oracle: added custom JDBC parameters support.                                           |
 | 0.1.18      | 2022-07-14 | [\#14618](https://github.com/airbytehq/airbyte/pull/14618) | Removed additionalProperties: false from JDBC destination connectors                                |
@@ -110,3 +113,5 @@ Airbyte has the ability to connect to the Oracle source with 3 network connectiv
 | 0.1.4       | 2021-07-30 | [\#5125](https://github.com/airbytehq/airbyte/pull/5125)   | Enable `additionalPropertities` in spec.json                                                        |
 | 0.1.3       | 2021-07-21 | [\#3555](https://github.com/airbytehq/airbyte/pull/3555)   | Partial Success in BufferedStreamConsumer                                                           |
 | 0.1.2       | 2021-07-20 | [\#4874](https://github.com/airbytehq/airbyte/pull/4874)   | Require `sid` instead of `database` in connector specification                                      |
+
+</details>

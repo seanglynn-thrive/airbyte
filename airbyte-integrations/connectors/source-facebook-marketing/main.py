@@ -3,11 +3,8 @@
 #
 
 
-import sys
+from source_facebook_marketing.run import run
 
-from airbyte_cdk.entrypoint import launch
-from source_facebook_marketing import SourceFacebookMarketing
 
 if __name__ == "__main__":
-    source = SourceFacebookMarketing()
-    launch(source, sys.argv[1:])
+    run()

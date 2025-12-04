@@ -8,18 +8,15 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Destination Timeplus",
     "type": "object",
-    "required": [
-      "endpoint",
-      "apikey"
-    ],
+    "required": ["endpoint", "apikey"],
     "additionalProperties": false,
     "properties": {
       "endpoint": {
         "title": "Endpoint",
         "description": "Timeplus workspace endpoint",
         "type": "string",
-        "default": "https://us.timeplus.cloud/<workspace_id>",
-        "examples": ["https://us.timeplus.cloud/workspace_id"],
+        "default": "https://us-west-2.timeplus.cloud/<workspace_id>",
+        "examples": ["https://us-west-2.timeplus.cloud/workspace_id"],
         "order": 0
       },
       "apikey": {

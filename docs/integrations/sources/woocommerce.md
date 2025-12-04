@@ -33,6 +33,7 @@ You will need to generate new API key with read permissions and use `Customer ke
 6. Choose start date you want to start sync from.
 7. (Optional) Fill in Conversion Window.
 <!-- env:oss -->
+
 ### For Airbyte OSS:
 
 1. Navigate to the Airbyte Open Source dashboard.
@@ -52,8 +53,9 @@ following [sync modes](https://docs.airbyte.com/cloud/core-concepts#connection-s
 - [Full Refresh - Overwrite](https://docs.airbyte.com/understanding-airbyte/connections/full-refresh-overwrite/)
 - [Full Refresh - Append](https://docs.airbyte.com/understanding-airbyte/connections/full-refresh-append)
 - [Incremental - Append](https://docs.airbyte.com/understanding-airbyte/connections/incremental-append)
-- [Incremental - Deduped History](https://docs.airbyte.com/understanding-airbyte/connections/incremental-deduped-history)
+- [Incremental - Append + Deduped](https://docs.airbyte.com/understanding-airbyte/connections/incremental-append-deduped)
 <!-- /env:oss -->
+
 ## Supported Streams
 
 - [Coupons](https://woocommerce.github.io/woocommerce-rest-api-docs/#coupons) \(Incremental\)
@@ -95,13 +97,88 @@ Useful links:
 | `object`         | `object`     |       |
 | `boolean`        | `boolean`    |       |
 
+## Limitations & Troubleshooting
+
+<details>
+<summary>
+Expand to see details about WooCommerce connector limitations and troubleshooting.
+</summary>
+
+### Connector limitations
+
+#### Rate limiting
+
+The WooCommerce API allows to
+set [custom rate limits](https://developer.woocommerce.com/2022/11/22/store-api-now-supports-rate-limiting/) to protect
+your store. If you set a custom rate limit,
+specify it in seconds in the `maxSecondsBetweenMessages` field in the `metadata.yaml` file. This value should be the
+maximum number of seconds between API calls.
+</details>
+
 ## Changelog
 
-| Version | Date       | Pull Request                                             | Subject                                                                 |
-| :------ | :--------- | :------------------------------------------------------- | :---------------------------------------------------------------------- |
-| 0.2.3   | 2023-06-02 | [26955](https://github.com/airbytehq/airbyte/pull/26955) | Added `block_context` and `author` properties to the `Products` stream  |
-| 0.2.2   | 2023-03-03 | [23599](https://github.com/airbytehq/airbyte/pull/23599) | Fix pagination and removed lookback window                              |
-| 0.2.1   | 2023-02-10 | [22821](https://github.com/airbytehq/airbyte/pull/22821) | Specified date formatting in specification                              |
-| 0.2.0   | 2022-11-30 | [19903](https://github.com/airbytehq/airbyte/pull/19903) | Migrate to low-code; Certification to Beta                              |
-| 0.1.1   | 2021-11-08 | [7499](https://github.com/airbytehq/airbyte/pull/7499)   | Remove base-python dependencies                                         |
-| 0.1.0   | 2021-09-09 | [5955](https://github.com/airbytehq/airbyte/pull/5955)   | Initial Release. Source WooCommerce                                     |
+<details>
+  <summary>Expand to review</summary>
+
+| Version | Date       | Pull Request                                             | Subject                                                                |
+|:--------| :--------- |:---------------------------------------------------------|:-----------------------------------------------------------------------|
+| 0.5.25 | 2025-11-25 | [70138](https://github.com/airbytehq/airbyte/pull/70138) | Update dependencies |
+| 0.5.24 | 2025-11-18 | [69676](https://github.com/airbytehq/airbyte/pull/69676) | Update dependencies |
+| 0.5.23 | 2025-11-13 | [69282](https://github.com/airbytehq/airbyte/pull/69282) | Add client side incremental sync support for customers stream |
+| 0.5.22 | 2025-10-29 | [68975](https://github.com/airbytehq/airbyte/pull/68975) | Update dependencies |
+| 0.5.21 | 2025-10-22 | [68591](https://github.com/airbytehq/airbyte/pull/68591) | Add `suggestedStreams` |
+| 0.5.20 | 2025-10-21 | [68393](https://github.com/airbytehq/airbyte/pull/68393) | Update dependencies |
+| 0.5.19 | 2025-10-14 | [67941](https://github.com/airbytehq/airbyte/pull/67941) | Update dependencies |
+| 0.5.18 | 2025-10-07 | [67328](https://github.com/airbytehq/airbyte/pull/67328) | Update dependencies |
+| 0.5.17 | 2025-09-30 | [66455](https://github.com/airbytehq/airbyte/pull/66455) | Update dependencies |
+| 0.5.16 | 2025-09-09 | [65708](https://github.com/airbytehq/airbyte/pull/65708) | Update dependencies |
+| 0.5.15 | 2025-08-24 | [65450](https://github.com/airbytehq/airbyte/pull/65450) | Update dependencies |
+| 0.5.14 | 2025-08-09 | [64822](https://github.com/airbytehq/airbyte/pull/64822) | Update dependencies |
+| 0.5.13 | 2025-08-02 | [64347](https://github.com/airbytehq/airbyte/pull/64347) | Update dependencies |
+| 0.5.12 | 2025-07-26 | [64087](https://github.com/airbytehq/airbyte/pull/64087) | Update dependencies |
+| 0.5.11 | 2025-07-19 | [63629](https://github.com/airbytehq/airbyte/pull/63629) | Update dependencies |
+| 0.5.10 | 2025-07-12 | [63207](https://github.com/airbytehq/airbyte/pull/63207) | Update dependencies |
+| 0.5.9 | 2025-07-05 | [62689](https://github.com/airbytehq/airbyte/pull/62689) | Update dependencies |
+| 0.5.8 | 2025-06-28 | [62259](https://github.com/airbytehq/airbyte/pull/62259) | Update dependencies |
+| 0.5.7 | 2025-06-21 | [61763](https://github.com/airbytehq/airbyte/pull/61763) | Update dependencies |
+| 0.5.6 | 2025-06-15 | [61474](https://github.com/airbytehq/airbyte/pull/61474) | Update dependencies |
+| 0.5.5 | 2025-05-31 | [51438](https://github.com/airbytehq/airbyte/pull/51438) | Update dependencies |
+| 0.5.4 | 2024-12-28 | [50800](https://github.com/airbytehq/airbyte/pull/50800) | Update dependencies |
+| 0.5.3 | 2024-12-21 | [50335](https://github.com/airbytehq/airbyte/pull/50335) | Update dependencies |
+| 0.5.2 | 2024-12-14 | [49382](https://github.com/airbytehq/airbyte/pull/49382) | Update dependencies |
+| 0.5.1 | 2024-12-11 | [47510](https://github.com/airbytehq/airbyte/pull/47510) | Starting with this version, the Docker image is now rootless. Please note that this and future versions will not be compatible with Airbyte versions earlier than 0.64 |
+| 0.5.0 | 2024-10-16 | [46956](https://github.com/airbytehq/airbyte/pull/46956) | Promoting release candidate 0.5.0-rc.1 to a main version. |
+| 0.5.0-rc.1  | 2024-10-08 | [46575](https://github.com/airbytehq/airbyte/pull/46575) | Migrate to Manifest-only |
+| 0.4.12 | 2024-10-12 | [46806](https://github.com/airbytehq/airbyte/pull/46806) | Update dependencies |
+| 0.4.11 | 2024-10-05 | [46423](https://github.com/airbytehq/airbyte/pull/46423) | Update dependencies |
+| 0.4.10 | 2024-09-28 | [46193](https://github.com/airbytehq/airbyte/pull/46193) | Update dependencies |
+| 0.4.9 | 2024-09-21 | [45776](https://github.com/airbytehq/airbyte/pull/45776) | Update dependencies |
+| 0.4.8 | 2024-09-14 | [45534](https://github.com/airbytehq/airbyte/pull/45534) | Update dependencies |
+| 0.4.7 | 2024-09-07 | [45230](https://github.com/airbytehq/airbyte/pull/45230) | Update dependencies |
+| 0.4.6 | 2024-08-31 | [44957](https://github.com/airbytehq/airbyte/pull/44957) | Update dependencies |
+| 0.4.5 | 2024-08-24 | [44627](https://github.com/airbytehq/airbyte/pull/44627) | Update dependencies |
+| 0.4.4 | 2024-08-19 | [44388](https://github.com/airbytehq/airbyte/pull/44388) | Update the CDK version to support RFR for Low-Code substreams |
+| 0.4.3 | 2024-08-17 | [44228](https://github.com/airbytehq/airbyte/pull/44228) | Update dependencies |
+| 0.4.2 | 2024-08-12 | [43786](https://github.com/airbytehq/airbyte/pull/43786) | Update dependencies |
+| 0.4.1 | 2024-08-10 | [43487](https://github.com/airbytehq/airbyte/pull/43487) | Update dependencies |
+| 0.4.0 | 2024-08-06 | [43323](https://github.com/airbytehq/airbyte/pull/43323) | Update CDK to v4, Python 3.10 |
+| 0.3.1 | 2024-08-03 | [43054](https://github.com/airbytehq/airbyte/pull/43054) | Update dependencies |
+| 0.3.0 | 2024-07-26 | [42551](https://github.com/airbytehq/airbyte/pull/42551) | Make builder compatible |
+| 0.2.13 | 2024-07-27 | [42637](https://github.com/airbytehq/airbyte/pull/42637) | Update dependencies |
+| 0.2.12 | 2024-07-20 | [42157](https://github.com/airbytehq/airbyte/pull/42157) | Update dependencies |
+| 0.2.11 | 2024-07-13 | [41731](https://github.com/airbytehq/airbyte/pull/41731) | Update dependencies |
+| 0.2.10 | 2024-07-10 | [41581](https://github.com/airbytehq/airbyte/pull/41581) | Update dependencies |
+| 0.2.9 | 2024-07-09 | [41161](https://github.com/airbytehq/airbyte/pull/41161) | Update dependencies |
+| 0.2.8 | 2024-07-06 | [40814](https://github.com/airbytehq/airbyte/pull/40814) | Update dependencies |
+| 0.2.7 | 2024-06-25 | [40375](https://github.com/airbytehq/airbyte/pull/40375) | Update dependencies |
+| 0.2.6 | 2024-06-22 | [40094](https://github.com/airbytehq/airbyte/pull/40094) | Update dependencies |
+| 0.2.5 | 2024-06-06 | [39270](https://github.com/airbytehq/airbyte/pull/39270) | [autopull] Upgrade base image to v1.2.2 |
+| 0.2.4 | 2024-05-21 | [38544](https://github.com/airbytehq/airbyte/pull/38544) | [autopull] base image + poetry + up_to_date |
+| 0.2.3 | 2023-06-02 | [26955](https://github.com/airbytehq/airbyte/pull/26955) | Added `block_context` and `author` properties to the `Products` stream |
+| 0.2.2 | 2023-03-03 | [23599](https://github.com/airbytehq/airbyte/pull/23599) | Fix pagination and removed lookback window |
+| 0.2.1 | 2023-02-10 | [22821](https://github.com/airbytehq/airbyte/pull/22821) | Specified date formatting in specification |
+| 0.2.0 | 2022-11-30 | [19903](https://github.com/airbytehq/airbyte/pull/19903) | Migrate to low-code; Certification to Beta |
+| 0.1.1 | 2021-11-08 | [7499](https://github.com/airbytehq/airbyte/pull/7499) | Remove base-python dependencies |
+| 0.1.0 | 2021-09-09 | [5955](https://github.com/airbytehq/airbyte/pull/5955) | Initial Release. Source WooCommerce |
+
+</details>

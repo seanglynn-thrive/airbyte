@@ -2,7 +2,7 @@
 
 This page guides you through setting up a [Fauna](https://fauna.com/) source.
 
-# Overview
+## Overview
 
 The Fauna source supports the following sync modes:
 
@@ -21,60 +21,64 @@ Enter the domain of the collection's database that you are exporting. The URL ca
 Follow these steps if you want this connection to perform a full sync.
 
 1. Create a role that can read the collection that you are exporting. You can create the role in the [Dashboard](https://dashboard.fauna.com/) or the [fauna shell](https://github.com/fauna/fauna-shell) with the following query:
+
 ```javascript
 CreateRole({
   name: "airbyte-readonly",
   privileges: [
     {
       resource: Collections(),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Indexes(),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Collection("COLLECTION_NAME"),
-      actions: { read: true }
-    }
+      actions: { read: true },
+    },
   ],
-})
+});
 ```
 
 Replace `COLLECTION_NAME` with the name of the collection configured for this connector. If you'd like to sync
 multiple collections, add an entry for each additional collection you'd like to sync. For example, to sync
 `users` and `products`, run this query instead:
+
 ```javascript
 CreateRole({
   name: "airbyte-readonly",
   privileges: [
     {
       resource: Collections(),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Indexes(),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Collection("users"),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Collection("products"),
-      actions: { read: true }
-    }
+      actions: { read: true },
+    },
   ],
-})
+});
 ```
 
 2. Create a key with that role. You can create a key using this query:
+
 ```javascript
 CreateKey({
   name: "airbyte-readonly",
   role: Role("airbyte-readonly"),
-})
+});
 ```
+
 3. Copy the `secret` output by the `CreateKey` command and enter that as the "Fauna Secret" on the left.
    **Important**: The secret is only ever displayed once. If you lose it, you would have to create a new key.
 
@@ -83,16 +87,14 @@ CreateKey({
 Follow these steps if you want this connection to perform incremental syncs.
 
 1. Create the "Incremental Sync Index". This allows the connector to perform incremental syncs. You can create the index with the [fauna shell](https://github.com/fauna/fauna-shell) or in the [Dashboard](https://dashboard.fauna.com/) with the following query:
+
 ```javascript
 CreateIndex({
   name: "INDEX_NAME",
   source: Collection("COLLECTION_NAME"),
   terms: [],
-  values: [
-    { "field": "ts" },
-    { "field": "ref" }
-  ]
-})
+  values: [{ field: "ts" }, { field: "ref" }],
+});
 ```
 
 Replace `COLLECTION_NAME` with the name of the collection configured for this connector.
@@ -101,28 +103,29 @@ Replace `INDEX_NAME` with the name that you configured for the Incremental Sync 
 Repeat this step for every collection you'd like to sync.
 
 2. Create a role that can read the collection, the index, and the metadata of all indexes. It needs access to index metadata in order to validate the index settings. You can create the role with this query:
+
 ```javascript
 CreateRole({
   name: "airbyte-readonly",
   privileges: [
     {
       resource: Collections(),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Indexes(),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Collection("COLLECTION_NAME"),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Index("INDEX_NAME"),
-      actions: { read: true }
-    }
+      actions: { read: true },
+    },
   ],
-})
+});
 ```
 
 Replace `COLLECTION_NAME` with the name of the collection configured for this connector.
@@ -131,46 +134,48 @@ Replace `INDEX_NAME` with the name that you configured for the Incremental Sync 
 If you'd like to sync multiple collections, add an entry for every collection and index
 you'd like to sync. For example, to sync `users` and `products` with Incremental Sync, run
 the following query:
+
 ```javascript
 CreateRole({
   name: "airbyte-readonly",
   privileges: [
     {
       resource: Collections(),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Indexes(),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Collection("users"),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Index("users-ts"),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Collection("products"),
-      actions: { read: true }
+      actions: { read: true },
     },
     {
       resource: Index("products-ts"),
-      actions: { read: true }
-    }
+      actions: { read: true },
+    },
   ],
-})
+});
 ```
 
-
 3. Create a key with that role. You can create a key using this query:
+
 ```javascript
 CreateKey({
   name: "airbyte-readonly",
   role: Role("airbyte-readonly"),
-})
+});
 ```
+
 4. Copy the `secret` output by the `CreateKey` command and enter that as the "Fauna Secret" on the left.
    **Important**: The secret is only ever displayed once. If you lose it, you would have to create a new key.
 
@@ -182,7 +187,7 @@ Note that the `ref` column in the exported database contains only the document I
 reference (or "ref"). Since only one collection is involved in each connector configuration, it is
 inferred that the document ID refers to a document within the synced collection.
 
-|                                  Fauna Type                                         |                             Format                                  |                   Note                      |
+| Fauna Type                                                                          | Format                                                              | Note                                        |
 | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
 | [Document Ref](https://docs.fauna.com/fauna/current/learn/understanding/types#ref)  | `{ id: "id", "collection": "collection-name", "type": "document" }` |                                             |
 | [Other Ref](https://docs.fauna.com/fauna/current/learn/understanding/types#ref)     | `{ id: "id", "type": "ref-type" }`                                  | This includes all other refs, listed below. |
@@ -195,7 +200,7 @@ inferred that the document ID refers to a document within the synced collection.
 Every ref is serialized as a JSON object with 2 or 3 fields, as listed above. The `type` field must be
 one of these strings:
 
-|                                    Reference Type                                       |    `type` string    |
+| Reference Type                                                                          | `type` string       |
 | --------------------------------------------------------------------------------------- | ------------------- |
 | Document                                                                                | `"document"`        |
 | [Collection](https://docs.fauna.com/fauna/current/api/fql/functions/collection)         | `"collection"`      |
@@ -222,7 +227,20 @@ FQL [`Select`](https://docs.fauna.com/fauna/current/api/fql/functions/select) is
 
 ## Changelog
 
+<details>
+  <summary>Expand to review</summary>
+
 | Version | Date       | Pull Request                                             | Subject                         |
 | ------- | ---------- | -------------------------------------------------------- | ------------------------------- |
-| 0.1.1   | 2022-12-12 | [20275](https://github.com/airbytehq/airbyte/pull/20275) | Fix index lookup with no values |
-| 0.1.0   | 2022-11-17 | [15274](https://github.com/airbytehq/airbyte/pull/15274) | Add Fauna Source                |
+| 0.1.9 | 2025-05-10 | [59992](https://github.com/airbytehq/airbyte/pull/59992) | Update dependencies |
+| 0.1.8 | 2025-05-03 | [59430](https://github.com/airbytehq/airbyte/pull/59430) | Update dependencies |
+| 0.1.7 | 2025-04-26 | [58913](https://github.com/airbytehq/airbyte/pull/58913) | Update dependencies |
+| 0.1.6 | 2025-04-12 | [57799](https://github.com/airbytehq/airbyte/pull/57799) | Update dependencies |
+| 0.1.5 | 2025-04-05 | [57218](https://github.com/airbytehq/airbyte/pull/57218) | Update dependencies |
+| 0.1.4 | 2025-03-29 | [56519](https://github.com/airbytehq/airbyte/pull/56519) | Update dependencies |
+| 0.1.3 | 2025-03-22 | [55955](https://github.com/airbytehq/airbyte/pull/55955) | Update dependencies |
+| 0.1.2 | 2024-07-10 | [41051](https://github.com/airbytehq/airbyte/pull/41051) | Migrate to poetry |
+| 0.1.1 | 2022-12-12 | [20275](https://github.com/airbytehq/airbyte/pull/20275) | Fix index lookup with no values |
+| 0.1.0 | 2022-11-17 | [15274](https://github.com/airbytehq/airbyte/pull/15274) | Add Fauna Source |
+
+</details>

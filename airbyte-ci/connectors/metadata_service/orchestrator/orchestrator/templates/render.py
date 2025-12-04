@@ -1,11 +1,15 @@
-import pandas as pd
-import urllib.parse
-import json
+#
+# Copyright (c) 2023 Airbyte, Inc., all rights reserved.
+#
 
-from jinja2 import Environment, PackageLoader
-from typing import List, Optional, Callable, Any
+import json
+import urllib.parse
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any, Callable, List, Optional
+
+import pandas as pd
+from jinja2 import Environment, PackageLoader
 from orchestrator.utils.object_helpers import deep_copy_params
 
 
@@ -37,6 +41,13 @@ def test_badge_html(test_summary_url: str) -> str:
     icon_url_encoded = urllib.parse.quote(icon_url)
     icon_image = f'<img src="{image_shield_base}?url={icon_url_encoded}">'
     return f'<a href="{report_url}" target="_blank">{icon_image}</a>'
+
+
+def internal_level_html(level_value: float) -> str:
+    # cast to int to remove decimal places
+    level = int(level_value)
+
+    return f"Level <b>{level}</b>"
 
 
 # Dataframe to HTML
@@ -160,73 +171,6 @@ def render_connector_registry_locations_html(destinations_table_html: str, sourc
     env = Environment(loader=PackageLoader("orchestrator", "templates"))
     template = env.get_template("connector_registry_locations.html")
     return template.render(destinations_table_html=destinations_table_html, sources_table_html=sources_table_html)
-
-
-def render_connector_nightly_report_md(nightly_report_connector_matrix_df: pd.DataFrame, nightly_report_complete_df: pd.DataFrame) -> str:
-    env = Environment(loader=PackageLoader("orchestrator", "templates"))
-    template = env.get_template("connector_nightly_report.md")
-
-    enhanced_nightly_report_df = enhance_nightly_report(nightly_report_connector_matrix_df)
-    failed_last_build_only_df = enhanced_nightly_report_df[enhanced_nightly_report_df["only_failed_last_build"] == True]
-    failed_last_build_two_builds_df = enhanced_nightly_report_df[enhanced_nightly_report_df["failed_last_build_two_builds"] == True]
-
-    total_connectors = len(nightly_report_connector_matrix_df)
-
-    source_stats = get_stats_for_connector_type(enhanced_nightly_report_df, "source")
-    destination_stats = get_stats_for_connector_type(enhanced_nightly_report_df, "destination")
-
-    latest_run = get_latest_nightly_report_df(nightly_report_complete_df)
-    last_action_url = latest_run["gha_workflow_run_url"]
-    last_action_date = latest_run["run_timestamp"]
-    last_action_run_duration_seconds = latest_run["run_duration"]
-    last_action_run_duration_human_readable = str(timedelta(seconds=last_action_run_duration_seconds))
-
-    return template.render(
-        total_connectors=total_connectors,
-        last_action_url=last_action_url,
-        last_action_date=last_action_date,
-        last_action_run_time=last_action_run_duration_human_readable,
-        source_stats=source_stats,
-        destination_stats=destination_stats,
-        failed_last_build_only=nightly_report_df_to_md(failed_last_build_only_df),
-        failed_last_build_only_count=len(failed_last_build_only_df),
-        failed_last_build_two_builds=nightly_report_df_to_md(failed_last_build_two_builds_df),
-        failed_last_build_two_builds_count=len(failed_last_build_two_builds_df),
-    )
-
-
-@deep_copy_params
-def render_connector_test_summary_html(connector_name: str, connector_test_summary_df: pd.DataFrame) -> str:
-    env = Environment(loader=PackageLoader("orchestrator", "templates"))
-    template = env.get_template("connector_test_summary.html")
-    columns_to_show: List[ColumnInfo] = [
-        {
-            "column": "date",
-            "title": "Date",
-        },
-        {
-            "column": "connector_version",
-            "title": "Version",
-        },
-        {
-            "column": "success",
-            "title": "Success",
-        },
-        {
-            "column": "html_report_url",
-            "title": "Test report",
-            "formatter": simple_link_html,
-        },
-        {
-            "column": "gha_workflow_run_url",
-            "title": "Github Action",
-            "formatter": simple_link_html,
-        },
-    ]
-
-    connector_test_summary_html = dataframe_to_table_html(connector_test_summary_df, columns_to_show)
-
-    return template.render(connector_name=connector_name, connector_test_summary_html=connector_test_summary_html)
 
 
 @deep_copy_params

@@ -7,6 +7,9 @@ import logging
 from typing import Any, Dict, List, Mapping
 
 import pytest
+from destination_databend import DestinationDatabend
+from destination_databend.client import DatabendClient
+
 from airbyte_cdk.models import (
     AirbyteMessage,
     AirbyteRecordMessage,
@@ -19,8 +22,6 @@ from airbyte_cdk.models import (
     SyncMode,
     Type,
 )
-from destination_databend import DestinationDatabend
-from destination_databend.client import DatabendClient
 
 
 @pytest.fixture(name="databendConfig")
@@ -62,12 +63,12 @@ def client_fixture(databendConfig) -> DatabendClient:
 
 
 def test_check_valid_config(databendConfig: Mapping):
-    outcome = DestinationDatabend().check(logging.getLogger('airbyte'), databendConfig)
+    outcome = DestinationDatabend().check(logging.getLogger("airbyte"), databendConfig)
     assert outcome.status == Status.SUCCEEDED
 
 
 def test_check_invalid_config():
-    outcome = DestinationDatabend().check(logging.getLogger('airbyte'), {"bucket_id": "not_a_real_id"})
+    outcome = DestinationDatabend().check(logging.getLogger("airbyte"), {"bucket_id": "not_a_real_id"})
     assert outcome.status == Status.FAILED
 
 

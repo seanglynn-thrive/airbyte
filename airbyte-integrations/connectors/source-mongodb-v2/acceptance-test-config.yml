@@ -3,27 +3,14 @@
 connector_image: airbyte/source-mongodb-v2:dev
 acceptance_tests:
   spec:
-    tests:
-      - spec_path: "integration_tests/expected_spec.json"
-        config_path: "secrets/credentials.json"
-        timeout_seconds: 60
+    bypass_reason: "CAT Tests have been deprecated."
   connection:
-    tests:
-      - config_path: "secrets/credentials.json"
-        status: "succeed"
-        timeout_seconds: 60
+    bypass_reason: "CAT Tests have been deprecated."
   discovery:
-    tests:
-      - config_path: "secrets/credentials.json"
-        timeout_seconds: 60
+    bypass_reason: "CAT Tests have been deprecated."
   basic_read:
-    tests:
-      - config_path: "secrets/credentials.json"
-        configured_catalog_path: "integration_tests/configured_catalog.json"
-        timeout_seconds: 120
+    bypass_reason: "CAT Tests have been deprecated."
   full_refresh:
-    tests:
-      - config_path: "secrets/credentials.json"
-        configured_catalog_path: "integration_tests/configured_catalog.json"
-        timeout_seconds: 180
-
+    bypass_reason: "CAT Tests have been deprecated."
+  incremental:
+    bypass_reason: "CAT Tests have been deprecated."

@@ -1,21 +1,60 @@
 data:
+  ab_internal:
+    ql: 200
+    sl: 100
+  allowedHosts:
+    hosts:
+      - api.sendinblue.com
+  connectorBuildOptions:
+    # Please update to the latest version of the connector base image.
+    # https://hub.docker.com/r/airbyte/python-connector-base
+    # Please use the full address with sha256 hash to guarantee build reproducibility.
+    baseImage: docker.io/airbyte/source-declarative-manifest:7.5.1@sha256:8da9d362c184e2e46532ab94f6f9968a74835c0882d6a4a2f9f9c9e5b972f2a1
   connectorSubtype: api
   connectorType: source
   definitionId: 2e88fa20-a2f6-43cc-bba6-98a0a3f244fb
-  dockerImageTag: 0.1.0
+  dockerImageTag: 0.2.17
   dockerRepository: airbyte/source-sendinblue
+  documentationUrl: https://docs.airbyte.com/integrations/sources/sendinblue
   githubIssueLabel: source-sendinblue
   icon: sendinblue.svg
-  license: MIT
+  license: ELv2
   name: Sendinblue
-  registries:
+  releaseDate: 2022-11-01
+  remoteRegistries:
+    pypi:
+      enabled: false
+      packageName: airbyte-source-sendinblue
+  registryOverrides:
     cloud:
       enabled: true
     oss:
       enabled: true
   releaseStage: alpha
-  documentationUrl: https://docs.airbyte.com/integrations/sources/sendinblue
+  supportLevel: community
   tags:
-    - language:low-code
-    - language:python
+    - cdk:low-code
+    - language:manifest-only
+  connectorTestSuitesOptions:
+    - suite: liveTests
+      testConnections:
+        - name: sendinblue_config_dev_null
+          id: 9dc930cc-4faa-47e7-b45d-f63f60b8ee9e
+    - suite: acceptanceTests
+      testSecrets:
+        - name: SECRET_SOURCE-SENDINBLUE__CREDS
+          fileName: config.json
+          secretStore:
+            type: GSM
+            alias: airbyte-connector-testing-secret-store
+  externalDocumentationUrls:
+    - title: Brevo (Sendinblue) API
+      url: https://developers.brevo.com/reference
+      type: api_reference
+    - title: Brevo authentication
+      url: https://developers.brevo.com/docs/getting-started
+      type: authentication_guide
+    - title: Brevo rate limits
+      url: https://developers.brevo.com/docs/api-limits
+      type: rate_limits
 metadataSpecVersion: "1.0"

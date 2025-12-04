@@ -1,11 +1,3 @@
-#
-# Copyright (c) 2023 Airbyte, Inc., all rights reserved.
-#
+# Copyright (c) 2024 Airbyte, Inc., all rights reserved.
 
-from airbyte_cdk.sources.streams.http.auth import NoAuth
-from pytest import fixture
-
-
-@fixture
-def config():
-    return {"start_date": "start_date", "authenticator": NoAuth}
+pytest_plugins = ["airbyte_cdk.test.utils.manifest_only_fixtures"]

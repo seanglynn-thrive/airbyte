@@ -1,12 +1,15 @@
 #
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
+
 import json
 import logging
 from datetime import datetime
 from typing import Any, Mapping
 
 import pytest
+from destination_timeplus import DestinationTimeplus
+
 from airbyte_cdk.models import (
     AirbyteMessage,
     AirbyteRecordMessage,
@@ -18,7 +21,6 @@ from airbyte_cdk.models import (
     SyncMode,
     Type,
 )
-from destination_timeplus import DestinationTimeplus
 
 
 @pytest.fixture(name="config")

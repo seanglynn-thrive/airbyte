@@ -25,6 +25,7 @@ properties:
       - githubIssueLabel
       - connectorSubtype
       - releaseStage
+    additionalProperties: false
     properties:
       name:
         type: string
@@ -33,6 +34,12 @@ properties:
       definitionId:
         type: string
         format: uuid
+      connectorBuildOptions:
+        "$ref": ConnectorBuildOptions.yaml
+      connectorTestSuitesOptions:
+        type: array
+        items:
+          "$ref": ConnectorTestSuiteOptions.yaml
       connectorType:
         type: string
         enum:
@@ -51,6 +58,44 @@ properties:
       documentationUrl:
         type: string
         format: uri
+      externalDocumentationUrls:
+        type: array
+        description: "An array of external vendor documentation URLs (changelogs, API references, deprecation notices, etc.)"
+        items:
+          type: object
+          required:
+            - title
+            - url
+          additionalProperties: false
+          properties:
+            title:
+              type: string
+              description: "Display title for the documentation link"
+            url:
+              type: string
+              format: uri
+              description: "URL to the external documentation"
+            type:
+              type: string
+              description: "Category of documentation"
+              enum:
+                - api_deprecations
+                - api_reference
+                - api_release_history
+                - authentication_guide
+                - data_model_reference
+                - developer_community
+                - migration_guide
+                - openapi_spec
+                - other
+                - permissions_scopes
+                - rate_limits
+                - sql_reference
+                - status_page
+            requiresLogin:
+              type: boolean
+              description: "Whether the URL requires authentication to access"
+              default: false
       githubIssueLabel:
         type: string
       maxSecondsBetweenMessages:
@@ -63,29 +108,31 @@ properties:
       protocolVersion:
         type: string
         description: the Airbyte Protocol version supported by the connector
+      erdUrl:
+        type: string
+        description: The URL where you can visualize the ERD
       connectorSubtype:
         type: string
         enum:
           - api
           - database
+          - datalake
           - file
           - custom
           - message_queue
           - unknown
+          - vectorstore
       releaseStage:
-        type: string
-        enum:
-          - alpha
-          - beta
-          - generally_available
-          - source
+        "$ref": ReleaseStage.yaml
+      supportLevel:
+        "$ref": SupportLevel.yaml
       tags:
         type: array
         description: "An array of tags that describe the connector. E.g: language:python, keyword:rds, etc."
         items:
           type: string
         default: []
-      registries:
+      registryOverrides:
         anyOf:
           - type: object
             additionalProperties: false
@@ -107,3 +154,20 @@ properties:
         "$ref": SuggestedStreams.yaml
       resourceRequirements:
         "$ref": ActorDefinitionResourceRequirements.yaml
+      ab_internal:
+        "$ref": AirbyteInternal.yaml
+      remoteRegistries:
+        "$ref": RemoteRegistries.yaml
+      supportsRefreshes:
+        type: boolean
+        default: false
+      generated:
+        "$ref": GeneratedFields.yaml
+      supportsFileTransfer:
+        type: boolean
+        default: false
+      supportsDataActivation:
+        type: boolean
+        default: false
+      connectorIPCOptions:
+        "$ref": ConnectorIPCOptions.yaml

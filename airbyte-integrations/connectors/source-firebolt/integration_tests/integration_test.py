@@ -8,6 +8,10 @@ from json import load
 from typing import Dict, Generator
 from unittest.mock import MagicMock
 
+from firebolt.db import Connection
+from pytest import fixture
+from source_firebolt.source import SourceFirebolt, establish_connection
+
 from airbyte_cdk.models import Status
 from airbyte_cdk.models.airbyte_protocol import (
     AirbyteStream,
@@ -16,9 +20,6 @@ from airbyte_cdk.models.airbyte_protocol import (
     DestinationSyncMode,
     SyncMode,
 )
-from firebolt.db import Connection
-from pytest import fixture
-from source_firebolt.source import SourceFirebolt, establish_connection
 
 
 @fixture(scope="module")
@@ -66,7 +67,7 @@ def table_schema() -> str:
             # Removed as part of PR 25965 because... it just didn't work?
             "column5": {"type": ["null", "string"]},
             "column6": {"type": "array", "items": {"type": ["null", "integer"]}},
-            "column7": {"type": ["null", "integer"]},
+            "column7": {"type": ["null", "boolean"]},
         },
     }
     return schema

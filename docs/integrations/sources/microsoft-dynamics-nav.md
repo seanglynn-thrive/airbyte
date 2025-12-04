@@ -4,7 +4,7 @@
 
 ## Sync overview
 
-MS Dynamics NAV runs on the [MSSQL](https://docs.microsoft.com/en-us/dynamics-nav/installation-considerations-for-microsoft-sql-server) database. You can use the [MSSQL connector](mssql.md) to sync your MS Dynamics NAV instance by connecting to the underlying database.
+MS Dynamics NAV runs on the [MSSQL](https://docs.microsoft.com/en-us/dynamics-nav/installation-considerations-for-microsoft-sql-server) database. You can use the [MSSQL connector](mssql) to sync your MS Dynamics NAV instance by connecting to the underlying database.
 
 :::info
 
@@ -15,4 +15,3 @@ Reach out to your service representative or system admin to find the parameters 
 ### Output schema
 
 To understand your MS Dynamics NAV database schema, see the [Microsoft docs](https://docs.microsoft.com/en-us/dynamics-nav-app/). Otherwise, the schema will be loaded according to the rules of MSSQL connector.
-

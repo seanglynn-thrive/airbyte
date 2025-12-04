@@ -11,6 +11,7 @@ from sgqlc.operation import Selector
 
 from . import github_schema
 
+
 _schema = github_schema
 _schema_root = _schema.github_schema
 
@@ -58,6 +59,40 @@ def get_query_pull_requests(owner, name, first, after, direction):
     user = pull_requests.nodes.merged_by(__alias__="merged_by").__as__(_schema_root.User)
     select_user_fields(user)
     pull_requests.page_info.__fields__(has_next_page=True, end_cursor=True)
+    return str(op)
+
+
+def get_query_projectsV2(owner, name, first, after, direction):
+    kwargs = {"first": first, "order_by": {"field": "UPDATED_AT", "direction": direction}}
+    if after:
+        kwargs["after"] = after
+
+    op = sgqlc.operation.Operation(_schema_root.query_type)
+    repository = op.repository(owner=owner, name=name)
+    repository.name()
+    repository.owner.login()
+    projects_v2 = repository.projects_v2(**kwargs)
+    projects_v2.nodes.__fields__(
+        closed=True,
+        created_at="created_at",
+        closed_at="closed_at",
+        updated_at="updated_at",
+        creator="creator",
+        id="node_id",
+        database_id="id",
+        number=True,
+        public=True,
+        readme="readme",
+        short_description="short_description",
+        template=True,
+        title="title",
+        url="url",
+        viewer_can_close=True,
+        viewer_can_reopen=True,
+        viewer_can_update=True,
+    )
+    projects_v2.nodes.owner.__fields__(id="id")
+    projects_v2.page_info.__fields__(has_next_page=True, end_cursor=True)
     return str(op)
 
 
@@ -131,7 +166,6 @@ def get_query_issue_reactions(owner, name, first, after, number=None):
 
 
 class QueryReactions:
-
     # AVERAGE_REVIEWS - optimal number of reviews to fetch inside every pull request.
     # If we try to fetch too many (up to 100) we will spend too many scores of query cost.
     # https://docs.github.com/en/graphql/overview/resource-limitations#calculating-a-rate-limit-score-before-running-the-call

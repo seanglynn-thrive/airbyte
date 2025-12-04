@@ -8,12 +8,14 @@ from abc import ABC
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
+
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream
 
 from .auth import WebflowTokenAuthenticator
 from .webflow_to_airbyte_mapping import WebflowToAirbyteMapping
+
 
 """
 This module is used for pulling the contents of "collections" out of Webflow, which is a CMS for hosting websites.
@@ -61,10 +63,10 @@ class WebflowStream(HttpStream, ABC):
 
 class CollectionSchema(WebflowStream):
     """
-    Gets the schema of the current collection - see: https://developers.webflow.com/#get-collection-with-full-schema, and
+    Gets the schema of the current collection - see: https://docs.developers.webflow.com/v1.0.0/reference/get-collection, and
     then converts that schema to a json-schema.org-compatible schema that uses supported Airbyte types.
 
-    More info about Webflow schema: https://developers.webflow.com/#get-collection-with-full-schema
+    More info about Webflow schema: https://docs.developers.webflow.com/v1.0.0/reference/get-collection
     Airbyte data types: https://docs.airbyte.com/understanding-airbyte/supported-data-types/
     """
 
@@ -77,8 +79,8 @@ class CollectionSchema(WebflowStream):
 
     def path(self, **kwargs) -> str:
         """
-        See: https://developers.webflow.com/#list-collections
-        Returns a list which contains high-level information about each collection.
+        See: https://docs.developers.webflow.com/v1.0.0/reference/get-collection
+        Returns a collection with full schema by collection_id
         """
 
         path = f"collections/{self.collection_id}"
@@ -201,7 +203,6 @@ class CollectionContents(WebflowStream):
         stream_slice: Mapping[str, Any] = None,
         next_page_token: Mapping[str, Any] = None,
     ) -> MutableMapping[str, Any]:
-
         # Webflow default pagination is 100, for debugging pagination we set this to a low value.
         # This should be set back to 100 for production
         params = {"limit": 100}
@@ -229,7 +230,7 @@ class CollectionContents(WebflowStream):
         """
 
         collection_id = self.collection_id
-        schema_stream = CollectionSchema(authenticator=self.authenticator, collection_id=collection_id)
+        schema_stream = CollectionSchema(authenticator=self._session.auth, collection_id=collection_id)
         schema_records = schema_stream.read_records(sync_mode="full_refresh")
 
         # each record corresponds to a property in the json schema. So we loop over each of these properties
@@ -243,6 +244,7 @@ class CollectionContents(WebflowStream):
         extra_fields = {
             "_id": {"type": ["null", "string"]},
             "_cid": {"type": ["null", "string"]},
+            "_locale": {"type": ["null", "string"]},
         }
         json_schema.update(extra_fields)
 
@@ -255,7 +257,6 @@ class CollectionContents(WebflowStream):
 
 
 class SourceWebflow(AbstractSource):
-
     """This is the main class that defines the methods that will be called by Airbyte infrastructure"""
 
     @staticmethod
@@ -283,7 +284,7 @@ class SourceWebflow(AbstractSource):
         which overloads that standard authentication to include additional headers that are required by Webflow.
         """
         api_key = config.get("api_key", None)
-        accept_version = WEBFLOW_ACCEPT_VERSION
+        accept_version = config.get("accept_version", WEBFLOW_ACCEPT_VERSION)
         if not api_key:
             raise Exception("Config validation error: 'api_key' is a required property")
 

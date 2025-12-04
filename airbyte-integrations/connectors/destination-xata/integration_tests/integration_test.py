@@ -7,6 +7,9 @@ from typing import Any, Mapping
 from unittest.mock import Mock
 
 import pytest
+from destination_xata import DestinationXata
+from xata.client import XataClient
+
 from airbyte_cdk.models import (
     AirbyteMessage,
     AirbyteRecordMessage,
@@ -18,8 +21,6 @@ from airbyte_cdk.models import (
     SyncMode,
     Type,
 )
-from destination_xata import DestinationXata
-from xata.client import XataClient
 
 
 @pytest.fixture(name="config")
@@ -69,12 +70,19 @@ def test_write(config: Mapping):
         destination_sync_mode=DestinationSyncMode.append,
     )
 
-    records = [AirbyteMessage(
-        type=Type.RECORD, record=AirbyteRecordMessage(stream="test_stream", data={
-            "str_col": "example",
-            "int_col": 1,
-        }, emitted_at=0)
-    )]
+    records = [
+        AirbyteMessage(
+            type=Type.RECORD,
+            record=AirbyteRecordMessage(
+                stream="test_stream",
+                data={
+                    "str_col": "example",
+                    "int_col": 1,
+                },
+                emitted_at=0,
+            ),
+        )
+    ]
 
     # setup Xata workspace
     xata = XataClient(api_key=config["api_key"], db_url=config["db_url"])
@@ -82,19 +90,23 @@ def test_write(config: Mapping):
     # database exists ?
     assert xata.databases().getDatabaseMetadata(db_name).status_code == 200, f"database '{db_name}' does not exist."
     assert xata.table().createTable("test_stream").status_code == 201, "could not create table, if it already exists, please delete it."
-    assert xata.table().setTableSchema("test_stream", {
-            "columns": [
-                {"name": "str_col", "type": "string"},
-                {"name": "int_col", "type": "int"},
-            ]
-        }).status_code == 200, "failed to set table schema"
+    assert (
+        xata.table()
+        .setTableSchema(
+            "test_stream",
+            {
+                "columns": [
+                    {"name": "str_col", "type": "string"},
+                    {"name": "int_col", "type": "int"},
+                ]
+            },
+        )
+        .status_code
+        == 200
+    ), "failed to set table schema"
 
     dest = DestinationXata()
-    list(dest.write(
-        config=config,
-        configured_catalog=test_stream,
-        input_messages=records
-    ))
+    list(dest.write(config=config, configured_catalog=test_stream, input_messages=records))
 
     # fetch record
     records = xata.data().queryTable("test_stream", {})

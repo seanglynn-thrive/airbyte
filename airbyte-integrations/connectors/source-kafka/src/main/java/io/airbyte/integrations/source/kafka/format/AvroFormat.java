@@ -9,7 +9,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.AbstractIterator;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.airbyte.commons.json.Jsons;
 import io.airbyte.commons.util.AutoCloseableIterator;
 import io.airbyte.commons.util.AutoCloseableIterators;
 import io.airbyte.integrations.source.kafka.KafkaStrategy;
@@ -38,6 +40,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,9 +61,17 @@ public class AvroFormat extends AbstractFormat {
     final JsonNode avro_config = config.get("MessageFormat");
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-    props.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
-    props.put(SchemaRegistryClientConfig.USER_INFO_CONFIG,
-        String.format("%s:%s", avro_config.get("schema_registry_username").asText(), avro_config.get("schema_registry_password").asText()));
+    if (avro_config.has("schema_registry_username")) {
+      props.put(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE, "USER_INFO");
+      props.put(SchemaRegistryClientConfig.USER_INFO_CONFIG,
+          String.format("%s:%s", avro_config.get("schema_registry_username").asText(), avro_config.get("schema_registry_password").asText()));
+    } else {
+      // If the registry username is missing; and the sasl_mechanism == OAUTHBEARER
+      final JsonNode protocolConfig = config.get("protocol");
+      if (protocolConfig.get("sasl_mechanism").asText().equals(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM)) {
+        props.put(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE, "SASL_OAUTHBEARER_INHERIT");
+      }
+    }
     props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, avro_config.get("schema_registry_url").asText());
     props.put(KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         KafkaStrategy.getStrategyName(avro_config.get("deserialization_strategy").asText()));
@@ -205,7 +216,7 @@ public class AvroFormat extends AbstractFormat {
               .withRecord(new AirbyteRecordMessage()
                   .withStream(record.topic())
                   .withEmittedAt(Instant.now().toEpochMilli())
-                  .withData(output));
+                  .withData(Jsons.jsonNode(ImmutableMap.builder().put("value", output).build())));
         }
 
         return endOfData();

@@ -4,9 +4,50 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
-from pydantic import AnyUrl, BaseModel, Extra, Field, constr
+from pydantic import AnyUrl, BaseModel, Extra, Field, conint, constr
+from typing_extensions import Literal
+
+
+class RolloutConfiguration(BaseModel):
+    class Config:
+        extra = Extra.forbid
+
+    enableProgressiveRollout: Optional[bool] = Field(
+        False, description="Whether to enable progressive rollout for the connector."
+    )
+    initialPercentage: Optional[conint(ge=0, le=100)] = Field(
+        0,
+        description="The percentage of users that should receive the new version initially.",
+    )
+    maxPercentage: Optional[conint(ge=0, le=100)] = Field(
+        50,
+        description="The percentage of users who should receive the release candidate during the test phase before full rollout.",
+    )
+    advanceDelayMinutes: Optional[conint(ge=10)] = Field(
+        10,
+        description="The number of minutes to wait before advancing the rollout percentage.",
+    )
+
+
+class StreamBreakingChangeScope(BaseModel):
+    class Config:
+        extra = Extra.forbid
+
+    scopeType: str = Field("stream", const=True)
+    impactedScopes: List[str] = Field(
+        ...,
+        description="List of streams that are impacted by the breaking change.",
+        min_items=1,
+    )
+
+
+class BreakingChangeScope(BaseModel):
+    __root__: StreamBreakingChangeScope = Field(
+        ...,
+        description="A scope that can be used to limit the impact of a breaking change.",
+    )
 
 
 class VersionBreakingChange(BaseModel):
@@ -20,9 +61,17 @@ class VersionBreakingChange(BaseModel):
     message: str = Field(
         ..., description="Descriptive message detailing the breaking change."
     )
+    deadlineAction: Optional[Literal["auto_upgrade", "disable"]] = Field(
+        None, description="Action to do when the deadline is reached."
+    )
     migrationDocumentationUrl: Optional[AnyUrl] = Field(
         None,
         description="URL to documentation on how to migrate to the current version. Defaults to ${documentationUrl}-migrations#${version}",
+    )
+    scopedImpact: Optional[List[BreakingChangeScope]] = Field(
+        None,
+        description="List of scopes that are impacted by the breaking change. If not specified, the breaking change cannot be scoped to reduce impact via the supported scope types.",
+        min_items=1,
     )
 
 
@@ -33,6 +82,7 @@ class ConnectorBreakingChanges(BaseModel):
     __root__: Dict[constr(regex=r"^\d+\.\d+\.\d+$"), VersionBreakingChange] = Field(
         ...,
         description="Each entry denotes a breaking change in a specific version of a connector that requires user action to upgrade.",
+        title="ConnectorBreakingChanges",
     )
 
 
@@ -40,7 +90,8 @@ class ConnectorReleases(BaseModel):
     class Config:
         extra = Extra.forbid
 
-    breakingChanges: ConnectorBreakingChanges
+    rolloutConfiguration: Optional[RolloutConfiguration] = None
+    breakingChanges: Optional[ConnectorBreakingChanges] = None
     migrationDocumentationUrl: Optional[AnyUrl] = Field(
         None,
         description="URL to documentation on how to migrate from the previous version to the current version. Defaults to ${documentationUrl}-migrations",

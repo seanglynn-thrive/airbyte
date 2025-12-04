@@ -1,24 +1,61 @@
 data:
+  ab_internal:
+    ql: 300
+    sl: 100
   allowedHosts:
     hosts:
       - api.tempo.io
   connectorSubtype: api
   connectorType: source
   definitionId: d1aa448b-7c54-498e-ad95-263cbebcd2db
-  dockerImageTag: 0.3.1
+  dockerImageTag: 0.4.39
   dockerRepository: airbyte/source-tempo
+  documentationUrl: https://docs.airbyte.com/integrations/sources/tempo
   githubIssueLabel: source-tempo
   icon: tempo.svg
-  license: MIT
+  license: ELv2
   name: Tempo
-  registries:
+  releaseDate: 2021-11-08
+  remoteRegistries:
+    pypi:
+      enabled: false
+      packageName: airbyte-source-tempo
+  registryOverrides:
     cloud:
       enabled: true
     oss:
       enabled: true
   releaseStage: beta
-  documentationUrl: https://docs.airbyte.com/integrations/sources/tempo
+  supportLevel: community
   tags:
-    - language:low-code
-    - language:python
+    - cdk:low-code
+    - language:manifest-only
+  connectorTestSuitesOptions:
+    - suite: liveTests
+      testConnections:
+        - name: tempo_accounts_only_config_dev_null
+          id: 1bffaa9d-68f0-4b31-9544-ecd2391551d8
+        - name: tempo_config_dev_null
+          id: 27804e86-37c0-46d3-a863-242ab459ce75
+    - suite: acceptanceTests
+      testSecrets:
+        - name: SECRET_SOURCE-TEMPO__CREDS
+          fileName: config.json
+          secretStore:
+            type: GSM
+            alias: airbyte-connector-testing-secret-store
+        - name: SECRET_SOURCE_TEMPO_LIMITED_SCOPES
+          fileName: accounts_only_config.json
+          secretStore:
+            type: GSM
+            alias: airbyte-connector-testing-secret-store
+  connectorBuildOptions:
+    baseImage: docker.io/airbyte/source-declarative-manifest:7.5.1@sha256:8da9d362c184e2e46532ab94f6f9968a74835c0882d6a4a2f9f9c9e5b972f2a1
+  externalDocumentationUrls:
+    - title: Tempo Timesheets API
+      url: https://apidocs.tempo.io/
+      type: api_reference
+    - title: Tempo authentication
+      url: https://apidocs.tempo.io/#section/Authentication
+      type: authentication_guide
 metadataSpecVersion: "1.0"

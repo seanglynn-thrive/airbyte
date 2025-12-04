@@ -6,12 +6,12 @@ from datetime import timedelta
 from typing import Any, Iterator, Mapping
 
 import pendulum
-from airbyte_cdk.models import FailureType
-from airbyte_cdk.utils import AirbyteTracedException
 from boto3 import session as boto3session
 from botocore import UNSIGNED
 from botocore.config import Config
 from botocore.exceptions import ClientError
+
+from airbyte_cdk import AirbyteTracedException, FailureType
 from source_s3.s3_utils import make_s3_client
 
 from .s3file import S3File
@@ -28,6 +28,7 @@ class IncrementalFileStreamS3(IncrementalFileStream):
         """
         :yield: url filepath to use in S3File()
         """
+        stream_state = self._get_converted_stream_state(stream_state)
         prefix = self._provider.get("path_prefix")
         if prefix is None:
             prefix = ""
@@ -51,9 +52,7 @@ class IncrementalFileStreamS3(IncrementalFileStream):
             # list_objects_v2 doesn't like a None value for ContinuationToken
             # so we don't set it if we don't have one.
             if ctoken:
-                kwargs = dict(
-                    Bucket=provider["bucket"], Prefix=provider.get("path_prefix", ""), ContinuationToken=ctoken
-                )  # type: ignore[unreachable]
+                kwargs = dict(Bucket=provider["bucket"], Prefix=provider.get("path_prefix", ""), ContinuationToken=ctoken)  # type: ignore[unreachable]
             else:
                 kwargs = dict(Bucket=provider["bucket"], Prefix=provider.get("path_prefix", ""))
             try:
@@ -66,7 +65,7 @@ class IncrementalFileStreamS3(IncrementalFileStream):
                 pass
             else:
                 for file in content:
-                    if self.is_not_folder(file) and self.filter_by_last_modified_date(file, stream_state):
+                    if self.is_not_folder(file) and self._filter_by_last_modified_date(file, stream_state):
                         yield FileInfo(key=file["Key"], last_modified=file["LastModified"], size=file["Size"])
             ctoken = response.get("NextContinuationToken", None)
             if not ctoken:
@@ -76,7 +75,7 @@ class IncrementalFileStreamS3(IncrementalFileStream):
     def is_not_folder(file) -> bool:
         return not file["Key"].endswith("/")
 
-    def filter_by_last_modified_date(self, file: Mapping[str, Any] = None, stream_state: Mapping[str, Any] = None):
+    def _filter_by_last_modified_date(self, file: Mapping[str, Any] = None, stream_state: Mapping[str, Any] = None):
         cursor_date = pendulum.parse(stream_state.get(self.cursor_field)) if stream_state else self.start_date
 
         file_in_history_and_last_modified_is_earlier_than_cursor_value = (
