@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.transform.medium
@@ -37,6 +37,7 @@ import io.airbyte.cdk.load.data.TimestampWithoutTimezoneValue
 import io.airbyte.cdk.load.data.UnionType
 import io.airbyte.cdk.load.data.UnknownType
 import io.airbyte.cdk.load.data.json.toAirbyteValue
+import io.airbyte.cdk.load.dataflow.config.model.MediumConverterConfig
 import io.airbyte.cdk.load.dataflow.transform.ValueCoercer
 import io.airbyte.cdk.load.dataflow.transform.data.ValidationResultHandler
 import io.airbyte.cdk.load.message.DestinationRecordProtobufSource
@@ -46,15 +47,13 @@ import io.airbyte.cdk.load.util.Jsons
 import io.airbyte.cdk.protocol.AirbyteValueProtobufDecoder
 import io.airbyte.protocol.models.v0.AirbyteRecordMessageMetaChange
 import io.airbyte.protocol.protobuf.AirbyteRecordMessage.AirbyteValueProtobuf
+import jakarta.inject.Singleton
 import java.math.BigDecimal
 import java.math.BigInteger
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.OffsetTime
-import java.time.ZoneOffset
-import javax.inject.Singleton
 
 /**
  * Converter that extracts typed values from protobuf records and converts them to
@@ -64,6 +63,7 @@ import javax.inject.Singleton
 class ProtobufConverter(
     private val coercer: ValueCoercer,
     private val validationResultHandler: ValidationResultHandler,
+    private val converterConfig: MediumConverterConfig,
 ) : MediumConverter {
 
     private val decoder = AirbyteValueProtobufDecoder()
@@ -91,7 +91,7 @@ class ProtobufConverter(
                     abValue = NullValue, // Temporary, will be set by extractTypedValue
                     type = accessor.type,
                     name = accessor.name,
-                    airbyteMetaField = null
+                    airbyteMetaField = null,
                 )
 
             val airbyteValue =
@@ -99,7 +99,7 @@ class ProtobufConverter(
                     protobufValue = protobufValue,
                     accessor = accessor,
                     enrichedValue = enrichedValue,
-                    streamName = stream.unmappedDescriptor.name
+                    streamName = stream.unmappedDescriptor.name,
                 )
             enrichedValue.abValue = airbyteValue
 
@@ -109,7 +109,7 @@ class ProtobufConverter(
                     partitionKey = input.partitionKey,
                     stream = stream.mappedDescriptor,
                     result = coercer.validate(mappedValue),
-                    value = mappedValue
+                    value = mappedValue,
                 )
 
             allParsingFailures.addAll(validatedValue.changes)
@@ -130,11 +130,13 @@ class ProtobufConverter(
         result: HashMap<String, AirbyteValue>,
         msg: DestinationRecordRaw,
         source: DestinationRecordProtobufSource,
-        parsingFailures: List<Meta.Change>
+        parsingFailures: List<Meta.Change>,
     ) {
-        val timestampValue = Instant.ofEpochMilli(source.emittedAtMs)
         result[Meta.COLUMN_NAME_AB_EXTRACTED_AT] =
-            TimestampWithTimezoneValue(OffsetDateTime.ofInstant(timestampValue, ZoneOffset.UTC))
+            Meta.getEmittedAtMs(
+                source.emittedAtMs,
+                converterConfig.extractedAtAsTimestampWithTimezone,
+            )
 
         result[Meta.COLUMN_NAME_AB_GENERATION_ID] =
             IntegerValue(msg.stream.generationId.toBigInteger())
@@ -156,16 +158,15 @@ class ProtobufConverter(
     }
 
     private fun buildMetaArrayValue(allChanges: List<Meta.Change>): ArrayValue {
-        val changeObjects =
-            allChanges.map { change ->
-                ObjectValue(
-                    linkedMapOf(
-                        "field" to StringValue(change.field),
-                        "change" to StringValue(change.change.toString()),
-                        "reason" to StringValue(change.reason.toString())
-                    )
-                )
-            }
+        val changeObjects = allChanges.map { change ->
+            ObjectValue(
+                linkedMapOf(
+                    "field" to StringValue(change.field),
+                    "change" to StringValue(change.change.toString()),
+                    "reason" to StringValue(change.reason.toString()),
+                ),
+            )
+        }
 
         return ArrayValue(changeObjects)
     }
@@ -174,7 +175,7 @@ class ProtobufConverter(
         protobufValue: AirbyteValueProtobuf?,
         accessor: FieldAccessor,
         enrichedValue: EnrichedAirbyteValue,
-        streamName: String
+        streamName: String,
     ): AirbyteValue {
         if (
             protobufValue == null || protobufValue.valueCase == AirbyteValueProtobuf.ValueCase.NULL
@@ -200,8 +201,8 @@ class ProtobufConverter(
                 Meta.Change(
                     accessor.name,
                     AirbyteRecordMessageMetaChange.Change.NULLED,
-                    AirbyteRecordMessageMetaChange.Reason.DESTINATION_SERIALIZATION_ERROR
-                )
+                    AirbyteRecordMessageMetaChange.Reason.DESTINATION_SERIALIZATION_ERROR,
+                ),
             )
             NullValue
         }
@@ -210,7 +211,7 @@ class ProtobufConverter(
     private fun extractRawValue(
         protobufValue: AirbyteValueProtobuf,
         accessor: FieldAccessor,
-        streamName: String
+        streamName: String,
     ): Any? {
         // Validate that the protobuf value type matches the expected AirbyteType
         validateProtobufType(protobufValue, accessor.type, streamName, accessor.name)
@@ -245,7 +246,7 @@ class ProtobufConverter(
         value: AirbyteValueProtobuf,
         expectedType: io.airbyte.cdk.load.data.AirbyteType,
         streamName: String,
-        columnName: String
+        columnName: String,
     ) {
         val valueCase = value.valueCase
 
@@ -303,13 +304,13 @@ class ProtobufConverter(
                 streamName = streamName,
                 columnName = columnName,
                 expectedType = expectedType,
-                actualValueCase = valueCase
+                actualValueCase = valueCase,
             )
         }
     }
 
     private fun getDefaultTargetClass(
-        airbyteType: io.airbyte.cdk.load.data.AirbyteType
+        airbyteType: io.airbyte.cdk.load.data.AirbyteType,
     ): Class<out AirbyteValue> {
         return when (airbyteType) {
             is BooleanType -> BooleanValue::class.java
@@ -332,7 +333,7 @@ class ProtobufConverter(
     @Suppress("UNCHECKED_CAST")
     private fun createAirbyteValue(
         rawValue: Any?,
-        targetClass: Class<out AirbyteValue>
+        targetClass: Class<out AirbyteValue>,
     ): AirbyteValue {
         if (rawValue == null) return NullValue
 

@@ -1,12 +1,11 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.postgres.write.load
 
-import com.google.common.annotations.VisibleForTesting
 import io.airbyte.cdk.load.data.AirbyteValue
-import io.airbyte.cdk.load.table.TableName
+import io.airbyte.cdk.load.schema.model.TableName
 import io.airbyte.integrations.destination.postgres.client.PostgresAirbyteClient
 import io.airbyte.integrations.destination.postgres.spec.PostgresConfiguration
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -30,9 +29,9 @@ class PostgresInsertBuffer(
     private val flushLimit: Int = DEFAULT_FLUSH_LIMIT,
 ) {
 
-    @VisibleForTesting internal var csvFilePath: Path? = null
+    internal var csvFilePath: Path? = null
 
-    @VisibleForTesting internal var recordCount = 0
+    internal var recordCount = 0
 
     private var csvPrinter: CSVPrinter? = null
 
@@ -63,7 +62,7 @@ class PostgresInsertBuffer(
                     "Finished insert of $recordCount row(s) into ${tableName.namespace}.${tableName.name}"
                 }
             } catch (e: Exception) {
-                logger.error(e) { "Unable to flush accumulated data." }
+                throw e
             } finally {
                 filePath.deleteIfExists()
                 csvPrinter?.close()
@@ -71,8 +70,7 @@ class PostgresInsertBuffer(
                 csvFilePath = null
                 recordCount = 0
             }
-        }
-            ?: logger.warn { "CSV file path is not set: nothing to upload." }
+        } ?: logger.warn { "CSV file path is not set: nothing to upload." }
     }
 
     private fun createCsvFile(): File {

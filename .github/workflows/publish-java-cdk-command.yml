@@ -79,6 +79,11 @@ jobs:
     name: Publish Java CDK
     runs-on: linux-24.04-large # Custom runner, defined in GitHub org settings
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+      pull-requests: write
     steps:
       - name: Link comment to Workflow Run
         if: github.event.inputs.comment-id
@@ -89,7 +94,7 @@ jobs:
             > :clock2: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
 
       - name: Checkout Airbyte
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ env.GITREF }}
 
@@ -107,17 +112,24 @@ jobs:
           echo "CDK_VERSION=${cdk_version}" >> $GITHUB_ENV
 
       - name: Setup Java
-        uses: actions/setup-java@17f84c3641ba7b8f6deff6309fc4c864478f5d62 # v3.14.1
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: "zulu"
           java-version: "21"
 
+      - name: Get Docker Hub OIDC token
+        id: docker-hub-oidc
+        uses: docker/oidc-action@96ba694c64860c7209bcd1ede7d698c71564ef78 # v1.2.0
+        with:
+          connection-id: ${{ vars.DOCKER_HUB_OIDC_READ_ONLY_CONNECTION_ID }}
+          expires-in: 1800
+
       - name: Docker login
         # Some tests use testcontainers which pull images from DockerHub.
-        uses: docker/login-action@dd4fa0671be5250ee6f50aedf4cb05514abda2c7 # v1.14.1
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+          username: airbyte
+          password: ${{ steps.docker-hub-oidc.outputs.token }}
 
       - name: Build Java CDK
         uses: burrunan/gradle-cache-action@3bf23b8dd95e7d2bacf2470132454fe893a178a1 # v1

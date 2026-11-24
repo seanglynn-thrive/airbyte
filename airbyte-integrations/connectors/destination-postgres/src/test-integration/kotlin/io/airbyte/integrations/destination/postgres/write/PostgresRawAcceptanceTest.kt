@@ -1,10 +1,11 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.postgres.write
 
 import io.airbyte.cdk.load.write.BasicFunctionalityIntegrationTest
+import io.airbyte.cdk.load.write.ColumnDropBehavior
 import io.airbyte.cdk.load.write.SchematizedNestedValueBehavior
 import io.airbyte.cdk.load.write.StronglyTyped
 import io.airbyte.cdk.load.write.UnionBehavior
@@ -43,7 +44,6 @@ class PostgresRawAcceptanceTest :
         schematizedArrayBehavior = SchematizedNestedValueBehavior.PASS_THROUGH,
         unionBehavior = UnionBehavior.STRINGIFY,
         stringifyUnionObjects = true,
-        supportFileTransfer = false,
         commitDataIncrementally = false,
         commitDataIncrementallyOnAppend = false,
         commitDataIncrementallyToEmptyDestinationOnAppend = true,
@@ -56,9 +56,9 @@ class PostgresRawAcceptanceTest :
             ),
         unknownTypesBehavior = UnknownTypesBehavior.PASS_THROUGH,
         nullEqualsUnset = false,
+        columnDropBehavior = ColumnDropBehavior.RETAIN,
         configUpdater = PostgresConfigUpdater(),
         recordMangler = PostgresExpectedRawRecordMapper,
-        useDataFlowPipeline = true,
     ) {
     companion object {
         @JvmStatic

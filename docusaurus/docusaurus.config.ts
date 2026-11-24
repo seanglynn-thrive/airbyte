@@ -2,7 +2,6 @@ import "dotenv/config.js";
 import type { Config } from "@docusaurus/types";
 import { themes as prismThemes } from "prism-react-renderer";
 import type { Options as ClassicPresetOptions } from "@docusaurus/preset-classic";
-import fs from "fs";
 import { PluginOptions as LLmPluginOptions } from "@signalwire/docusaurus-plugin-llms-txt";
 
 // Import remark plugins - lazy load to prevent webpack from bundling Node.js code
@@ -12,44 +11,35 @@ const getRemarkPlugins = () => ({
   productInformation: require("./src/remark/productInformation"),
   connectorList: require("./src/remark/connectorList"),
   specDecoration: require("./src/remark/specDecoration"),
+  changelogPages: require("./src/remark/changelogPages"),
   docMetaTags: require("./src/remark/docMetaTags"),
   addButtonToTitle: require("./src/remark/addButtonToTitle"),
-  npm2yarn: require("@docusaurus/remark-plugin-npm2yarn"),
 });
 
 const plugins = getRemarkPlugins();
-
-// Import constants
-const {
-  SPEC_CACHE_PATH,
-  API_SIDEBAR_PATH,
-} = require("./src/scripts/embedded-api/constants");
 
 const lightCodeTheme = prismThemes.github;
 const darkCodeTheme = prismThemes.dracula;
 
 const config: Config = {
   future: {
-    experimental_faster: {
-      swcJsLoader: true,
-      swcJsMinimizer: true,
-      swcHtmlMinimizer: true,
-      lightningCssMinimizer: true,
-      mdxCrossCompilerCache: true,
-      rspackBundler: true,
-      rspackPersistentCache: true,
-    },
+    v4: true,
+    faster: true,
   },
   markdown: {
     mermaid: true,
     hooks: {
       onBrokenMarkdownLinks: "throw",
     },
+    mdx1Compat: {
+      comments: true,
+      admonitions: true,
+      headingIds: true,
+    },
   },
   themes: [
     "@docusaurus/theme-mermaid",
     "@saucelabs/theme-github-codeblock",
-    "docusaurus-theme-openapi-docs",
   ],
   title: "Airbyte Docs",
   tagline:
@@ -58,30 +48,13 @@ const config: Config = {
   // Assumed relative path.  If you are using airbytehq.github.io use /
   // anything else should match the repo name
   baseUrl: "/",
+  trailingSlash: false,
   onBrokenLinks: "throw",
 
   favicon: "img/favicon.png",
   organizationName: "airbytehq", // Usually your GitHub org/user name.
   projectName: "airbyte", // Usually your repo name.
 
-  // Adds one off script tags to the head of each page
-  // e.g. <script async data-api-key="..." id="unifytag" src="..."></script>
-  scripts: [
-    {
-      src: "https://cdn.unifygtm.com/tag/v1/unify-tag-script.js",
-      async: true,
-      type: "module",
-      id: "unifytag",
-      "data-api-key": "wk_BEtrdAz2_2qgdexg5KRa6YWLWVwDdieFC7CAHkDKz",
-    },
-    {
-      src: "https://cdn.jsdelivr.net/npm/hockeystack@latest/hockeystack.min.js",
-      async: true,
-      "data-apikey": "2094e2379643f69f7aec647a15f786",
-      "data-cookieless": "1",
-      "data-auto-identify": "1",
-    },
-  ],
   headTags: [
     {
       tagName: "meta",
@@ -125,7 +98,20 @@ const config: Config = {
     ],
   ],
   plugins: [
-    // This plugin controls "platform" docs, which are versioned
+    // disables concatenateModules optimization for dev and for prod server builds to improve build times - more info: https://github.com/facebook/docusaurus/discussions/11199
+    function disableExpensiveBundlerOptimizationPlugin() {
+      return {
+        name: "disable-expensive-bundler-optimizations",
+        configureWebpack(_config, isServer) {
+          return {
+            optimization: {
+              concatenateModules: false,
+            },
+          };
+        },
+      };
+    },
+    // This plugin controls "platform" docs (no longer versioned)
     [
       "@docusaurus/plugin-content-docs",
       {
@@ -133,46 +119,18 @@ const config: Config = {
         path: "../docs/platform",
         routeBasePath: "/platform",
         sidebarPath: "./sidebar-platform.js",
-        editUrl: ({
-          version,
-          docPath,
-        }: {
-          version: string;
-          docPath: string;
-        }) => {
-          if (version === "current") {
-            // For the "next" (unreleased) version
-            return `https://github.com/airbytehq/airbyte/edit/master/docs/platform/${docPath}`;
-          } else {
-            // For released versions
-            return `https://github.com/airbytehq/airbyte/edit/master/docusaurus/platform_versioned_docs/version-${version}/${docPath}`;
+        async sidebarItemsGenerator({defaultSidebarItemsGenerator, ...args}) {
+          const items = await defaultSidebarItemsGenerator(args);
+          if (args.item.dirName === "connector-development/config-based/understanding-the-yaml-file/reference") {
+            return items.filter((item) => item.type !== "doc" || item.id !== "connector-development/config-based/understanding-the-yaml-file/reference/index");
           }
+          return items;
         },
+        editUrl:
+          "https://github.com/airbytehq/airbyte/blob/master/docs",
         remarkPlugins: [
-          plugins.docsHeaderDecoration,
-          plugins.enterpriseDocsHeaderInformation,
           plugins.productInformation,
-          plugins.docMetaTags,
           plugins.addButtonToTitle,
-        ],
-      },
-    ],
-    // This plugin controls AI Agent Tools docs, which are not versioned
-    [
-      "@docusaurus/plugin-content-docs",
-      {
-        id: "ai-agents",
-        path: "../docs/ai-agents",
-        routeBasePath: "/ai-agents",
-        sidebarPath: "./sidebar-ai-agents.js",
-        editUrl: "https://github.com/airbytehq/airbyte/blob/master/docs",
-        remarkPlugins: [
-          plugins.docsHeaderDecoration,
-          plugins.enterpriseDocsHeaderInformation,
-          plugins.productInformation,
-          plugins.docMetaTags,
-          plugins.addButtonToTitle,
-          [plugins.npm2yarn, { sync: true }],
         ],
       },
     ],
@@ -186,10 +144,7 @@ const config: Config = {
         sidebarPath: "./sidebar-release_notes.js",
         editUrl: "https://github.com/airbytehq/airbyte/blob/master/docs",
         remarkPlugins: [
-          plugins.docsHeaderDecoration,
-          plugins.enterpriseDocsHeaderInformation,
           plugins.productInformation,
-          plugins.docMetaTags,
           plugins.addButtonToTitle,
         ],
       },
@@ -205,6 +160,7 @@ const config: Config = {
         editUrl: "https://github.com/airbytehq/airbyte/blob/master/docs",
         beforeDefaultRemarkPlugins: [
           plugins.specDecoration,
+          plugins.changelogPages,
           plugins.connectorList,
         ], // use before-default plugins so TOC rendering picks up inserted headings
         remarkPlugins: [
@@ -226,7 +182,6 @@ const config: Config = {
         editUrl: "https://github.com/airbytehq/airbyte/blob/master/docs",
         remarkPlugins: [
           plugins.productInformation,
-          plugins.docMetaTags,
           plugins.addButtonToTitle,
         ],
       },
@@ -241,109 +196,13 @@ const config: Config = {
         sidebarPath: "./sidebar-community.js",
         editUrl: "https://github.com/airbytehq/airbyte/blob/master/docs",
         remarkPlugins: [
-          plugins.docsHeaderDecoration,
-          plugins.enterpriseDocsHeaderInformation,
           plugins.productInformation,
-          plugins.docMetaTags,
           plugins.addButtonToTitle,
         ],
       },
     ],
-    [
-      "@docusaurus/plugin-content-docs",
-      {
-        id: "embedded-api",
-        path: "api-docs/embedded-api",
-        routeBasePath: "/embedded-api/",
-        docItemComponent: "@theme/ApiItem",
-        async sidebarItemsGenerator() {
-          // We only want to include visible endpoints on the sidebar. We need to filter out endpoints with tags
-          // that are not included in the spec. Even if we didn't need to filter out elements the OpenAPI plugin generates a sidebar.ts
-          // file that exports a nested object, but Docusaurus expects just the array of sidebar items, so we need to extracts the actual sidebar
-          // items from the generated file structure.
-
-          try {
-            const specPath = SPEC_CACHE_PATH;
-
-            if (!fs.existsSync(specPath)) {
-              console.warn(
-                "Embedded API spec file not found, using empty sidebar",
-              );
-              return [];
-            }
-
-            const data = JSON.parse(fs.readFileSync(specPath, "utf8"));
-            console.log("Loaded embedded API spec from cache");
-
-            // Load the freshly generated sidebar (not the cached one from module load)
-            const sidebarPath = API_SIDEBAR_PATH;
-            let freshSidebar: any[] = [];
-
-            if (fs.existsSync(sidebarPath)) {
-              try {
-                const sidebarModule = require("./api-docs/embedded-api/sidebar.ts");
-                freshSidebar = sidebarModule.default || sidebarModule;
-                console.log("Loaded fresh sidebar from generated files");
-              } catch (sidebarError: any) {
-                console.warn(
-                  "Could not load fresh sidebar, using empty array:",
-                  sidebarError.message,
-                );
-                freshSidebar = [];
-              }
-            } else {
-              console.warn(
-                "Generated sidebar file not found, using empty array",
-              );
-              freshSidebar = [];
-            }
-
-            const allowedTags = data.tags?.map((tag: any) => tag["name"]) || [];
-
-            // Use freshly loaded sidebar items from the generated file
-            const sidebarItems = Array.isArray(freshSidebar)
-              ? freshSidebar
-              : [];
-
-            const filteredItems = sidebarItems.filter((item: any) => {
-              if (item.type !== "category") {
-                return true;
-              }
-
-              return allowedTags.includes(item.label);
-            });
-
-            return filteredItems;
-          } catch (error: any) {
-            console.warn(
-              "Error loading embedded API spec from cache:",
-              error.message,
-            );
-            return [];
-          }
-        },
-      },
-    ],
-    [
-      "docusaurus-plugin-openapi-docs",
-      {
-        id: "embedded-api",
-        docsPluginId: "embedded-api",
-        config: {
-          embedded: {
-            specPath: "src/data/embedded_api_spec.json",
-            outputDir: "api-docs/embedded-api",
-            sidebarOptions: {
-              groupPathsBy: "tag",
-              categoryLinkSource: "tag",
-              sidebarCollapsed: false,
-              sidebarCollapsible: false,
-            },
-          },
-        },
-      },
-    ],
     require.resolve("./src/plugins/enterpriseConnectors"),
+    require.resolve("./src/plugins/agentConnectors"),
     [
       "@signalwire/docusaurus-plugin-llms-txt",
       {
@@ -388,43 +247,33 @@ const config: Config = {
   ],
   customFields: {
     requestErdApiUrl: process.env.REQUEST_ERD_API_URL,
-    markpromptProjectKey:
-      process.env.MARKPROMPT_PROJECT_KEY ||
-      "sk_test_cbPFAzAxUvafRj6l1yjzrESu0bRpzQGK",
   },
   clientModules: [
+    require.resolve("./src/scripts/yaml-reference-redirect.js"),
     require.resolve("./src/scripts/cloudStatus.js"),
     require.resolve("./src/scripts/download-abctl-buttons.js"),
     require.resolve("./src/scripts/fontAwesomeIcons.js"),
+    require.resolve("./src/scripts/kapaWithDataGrailConsent.js"),
   ],
 
   themeConfig: {
+    // Default social card for og:image/twitter:image on every page. Per-page
+    // front matter `image` still takes precedence.
+    image: "img/airbyte-docs-social-card.png",
+    metadata: [
+      // Docs pages override this with "article" in src/theme/DocItem/Metadata.
+      { property: "og:type", content: "website" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt", content: "Airbyte Documentation" },
+    ],
     colorMode: {
       disableSwitch: false,
     },
     mermaid: {
       theme: {
-        light: "base",
-        dark: "base",
-      },
-      options: {
-        themeVariables: {
-          primaryColor: "#5F5CFF",
-          primaryTextColor: "#FFFFFF",
-          primaryBorderColor: "#1A194D",
-          secondaryColor: "#FF6A4D",
-          tertiaryColor: "#E8EAF6",
-          tertiaryTextColor: "#000000",
-          tertiaryBorderColor: "#E8EAF6",
-          background: "#FFFFFF",
-          clusterBkg: "#F5F5F5",
-          fontFamily: "var(--ifm-font-family-base)",
-        },
-        flowchart: {
-          rankSpacing: 100,
-          subGraphTitleMargin: 10,
-          nodeSpacing: 100,
-        },
+        light: "default",
+        dark: "dark",
       },
     },
     docs: {
@@ -440,10 +289,10 @@ const config: Config = {
     announcementBar: {
       id: "try_airbyte_cloud",
       content:
-        '<a target="_blank" rel="noopener noreferrer" href="https://cloud.airbyte.io/signup?utm_campaign=22Q1_AirbyteCloudSignUpCampaign_Trial&utm_source=Docs&utm_content=NavBar">Try Airbyte Cloud</a>! Free for 30 days, no credit card needed.',
+        '<a target="_blank" rel="noopener noreferrer" href="https://cloud.airbyte.com/signup?utm_source=docs&utm_medium=banner&utm_campaign=airbyte_cloud_docs_banner">Try Airbyte Cloud!</a> Free trial for 14 days, no credit card needed.',
       backgroundColor: "#615eff",
       textColor: "#ffffff",
-      isCloseable: true,
+      isCloseable: false,
     },
     navbar: {
       title: "Docs",
@@ -478,13 +327,6 @@ const config: Config = {
         {
           type: "docSidebar",
           position: "left",
-          docsPluginId: "ai-agents",
-          sidebarId: "ai-agents",
-          label: "AI agents",
-        },
-        {
-          type: "docSidebar",
-          position: "left",
           docsPluginId: "developers",
           sidebarId: "developers",
           label: "Developers",
@@ -502,14 +344,6 @@ const config: Config = {
           className: "cloudStatusLink",
         },
         // --- Right side ---
-        // Platform docs version selector
-        {
-          type: "docsVersionDropdown",
-          position: "right",
-          docsPluginId: "platform",
-          label: "Version",
-          dropdownActiveClassDisabled: true,
-        },
         {
           href: "https://github.com/airbytehq",
           position: "right",

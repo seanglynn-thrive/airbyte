@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.bigquery.write.typing_deduping.legacy_raw_tables
@@ -9,22 +9,22 @@ import com.google.cloud.bigquery.QueryJobConfiguration
 import com.google.cloud.bigquery.TableId
 import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.orchestration.db.DatabaseInitialStatusGatherer
+import io.airbyte.cdk.load.orchestration.db.TableName
+import io.airbyte.cdk.load.orchestration.db.TableNames
 import io.airbyte.cdk.load.orchestration.db.legacy_typing_deduping.FinalTableInitialStatus
 import io.airbyte.cdk.load.orchestration.db.legacy_typing_deduping.RawTableInitialStatus
 import io.airbyte.cdk.load.orchestration.db.legacy_typing_deduping.TableCatalog
 import io.airbyte.cdk.load.orchestration.db.legacy_typing_deduping.TypingDedupingDatabaseInitialStatus
-import io.airbyte.cdk.load.table.TableName
-import io.airbyte.cdk.load.table.TableSuffixes.TMP_TABLE_SUFFIX
 
 class BigqueryTypingDedupingDatabaseInitialStatusGatherer(private val bq: BigQuery) :
     DatabaseInitialStatusGatherer<TypingDedupingDatabaseInitialStatus> {
     private fun getInitialRawTableState(
         rawTableName: TableName,
-        suffix: String
+        suffix: String,
     ): RawTableInitialStatus? {
         bq.getTable(TableId.of(rawTableName.namespace, rawTableName.name + suffix))
-        // Table doesn't exist. There are no unprocessed records, and no timestamp.
-        ?: return null
+            // Table doesn't exist. There are no unprocessed records, and no timestamp.
+            ?: return null
 
         val rawTableIdQuoted = """`${rawTableName.namespace}`.`${rawTableName.name}$suffix`"""
         val unloadedRecordTimestamp =
@@ -34,8 +34,9 @@ class BigqueryTypingDedupingDatabaseInitialStatusGatherer(private val bq: BigQue
                             SELECT TIMESTAMP_SUB(MIN(_airbyte_extracted_at), INTERVAL 1 MICROSECOND)
                             FROM $rawTableIdQuoted
                             WHERE _airbyte_loaded_at IS NULL
-                            """.trimIndent()
-                    )
+                            """
+                            .trimIndent(),
+                    ),
                 )
                 .iterateAll()
                 .iterator()
@@ -57,8 +58,9 @@ class BigqueryTypingDedupingDatabaseInitialStatusGatherer(private val bq: BigQue
                         """
                     SELECT MAX(_airbyte_extracted_at)
                     FROM $rawTableIdQuoted
-                    """.trimIndent()
-                    )
+                    """
+                            .trimIndent(),
+                    ),
                 )
                 .iterateAll()
                 .iterator()
@@ -75,7 +77,7 @@ class BigqueryTypingDedupingDatabaseInitialStatusGatherer(private val bq: BigQue
             // this value.
             RawTableInitialStatus(
                 hasUnprocessedRecords = false,
-                maxProcessedTimestamp = loadedRecordTimestamp.timestampInstant
+                maxProcessedTimestamp = loadedRecordTimestamp.timestampInstant,
             )
         }
     }
@@ -97,7 +99,7 @@ class BigqueryTypingDedupingDatabaseInitialStatusGatherer(private val bq: BigQue
             val tempRawTableState =
                 getInitialRawTableState(
                     tableNames.rawTableName!!,
-                    TMP_TABLE_SUFFIX,
+                    TableNames.TMP_TABLE_SUFFIX,
                 )
             TypingDedupingDatabaseInitialStatus(
                 finalTableStatus,

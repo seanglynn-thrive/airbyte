@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.transform.medium
@@ -8,6 +8,7 @@ import io.airbyte.cdk.data.LeafAirbyteSchemaType
 import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.data.*
 import io.airbyte.cdk.load.data.AirbyteValueProxy.FieldAccessor
+import io.airbyte.cdk.load.dataflow.config.model.MediumConverterConfig
 import io.airbyte.cdk.load.dataflow.state.PartitionKey
 import io.airbyte.cdk.load.dataflow.transform.ValidationResult
 import io.airbyte.cdk.load.dataflow.transform.ValueCoercer
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.Test
 class ProtobufConverterTest {
 
     private val encoder = AirbyteValueProtobufEncoder()
+    private val defaultConfig = MediumConverterConfig(extractedAtAsTimestampWithTimezone = true)
 
     private fun createMockCoercerPassThrough(): ValueCoercer =
         mockk<ValueCoercer> {
@@ -91,7 +93,7 @@ class ProtobufConverterTest {
         values: List<AirbyteRecordMessage.AirbyteValueProtobuf>,
         emittedAtMs: Long = System.currentTimeMillis(),
         metaChanges: List<AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMetaChange> =
-            emptyList()
+            emptyList(),
     ): DestinationRecordProtobufSource {
         val metaProto =
             AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMeta.newBuilder()
@@ -115,7 +117,7 @@ class ProtobufConverterTest {
     private fun metaChange(
         field: String,
         change: AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType,
-        reason: AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType
+        reason: AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType,
     ) =
         AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMetaChange.newBuilder()
             .setField(field)
@@ -129,7 +131,7 @@ class ProtobufConverterTest {
         generationId: Long = 1L,
         syncId: Long = 2L,
         unknownChanges: List<Meta.Change> = emptyList(),
-        columnNameMapper: ((String) -> String)? = null
+        columnNameMapper: ((String) -> String)? = null,
     ): DestinationRecordRaw {
         val destinationStream =
             mockk<DestinationStream> {
@@ -161,7 +163,7 @@ class ProtobufConverterTest {
     fun `convertWithMetadata processes basic types correctly`() {
         val valueCoercer = createMockCoercerPassThrough()
         val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
-        val converter = ProtobufConverter(valueCoercer, validationResultHandler)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, defaultConfig)
 
         val accessors =
             arrayOf(
@@ -180,9 +182,9 @@ class ProtobufConverterTest {
                 fa(
                     "union_field",
                     UnionType.of(ObjectType(linkedMapOf("u" to FieldType(IntegerType, false)))),
-                    12
+                    12,
                 ),
-                fa("unknown_field", UnknownType(Jsons.emptyObject()), 13)
+                fa("unknown_field", UnknownType(Jsons.emptyObject()), 13),
             )
 
         val protoValues =
@@ -198,14 +200,14 @@ class ProtobufConverterTest {
                 vTsTz(
                     OffsetDateTime.of(
                         LocalDateTime.parse("2025-06-17T23:59:59"),
-                        ZoneOffset.ofHours(2)
-                    )
+                        ZoneOffset.ofHours(2),
+                    ),
                 ),
                 vTsNoTz(LocalDateTime.parse("2025-06-17T23:59:59")),
                 vJson("""["a","b"]"""),
                 vJson("""{"k":"v"}"""),
                 vJson("""{"u":1}"""),
-                vNull()
+                vNull(),
             )
 
         val msg = mockMsgWithStream(accessors, buildProtoSource(protoValues.map { it.build() }))
@@ -232,25 +234,25 @@ class ProtobufConverterTest {
         assertTrue(result["time_tz_field"] is TimeWithTimezoneValue)
         assertEquals(
             "23:59:59+02:00",
-            (result["time_tz_field"] as TimeWithTimezoneValue).value.toString()
+            (result["time_tz_field"] as TimeWithTimezoneValue).value.toString(),
         )
 
         assertTrue(result["time_no_tz_field"] is TimeWithoutTimezoneValue)
         assertEquals(
             "23:59:59",
-            (result["time_no_tz_field"] as TimeWithoutTimezoneValue).value.toString()
+            (result["time_no_tz_field"] as TimeWithoutTimezoneValue).value.toString(),
         )
 
         assertTrue(result["ts_tz_field"] is TimestampWithTimezoneValue)
         assertEquals(
             "2025-06-17T23:59:59+02:00",
-            (result["ts_tz_field"] as TimestampWithTimezoneValue).value.toString()
+            (result["ts_tz_field"] as TimestampWithTimezoneValue).value.toString(),
         )
 
         assertTrue(result["ts_no_tz_field"] is TimestampWithoutTimezoneValue)
         assertEquals(
             "2025-06-17T23:59:59",
-            (result["ts_no_tz_field"] as TimestampWithoutTimezoneValue).value.toString()
+            (result["ts_no_tz_field"] as TimestampWithoutTimezoneValue).value.toString(),
         )
 
         assertTrue(result.containsKey("array_field"))
@@ -272,14 +274,14 @@ class ProtobufConverterTest {
     fun `convertWithMetadata handles BigDecimal values correctly`() {
         val valueCoercer = createMockCoercerPassThrough()
         val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
-        val converter = ProtobufConverter(valueCoercer, validationResultHandler)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, defaultConfig)
 
         val accessors =
             arrayOf(
                 fa("small_decimal", NumberType, 0),
                 fa("large_decimal", NumberType, 1),
                 fa("scientific_decimal", NumberType, 2),
-                fa("negative_decimal", NumberType, 3)
+                fa("negative_decimal", NumberType, 3),
             )
 
         val protoValues =
@@ -287,7 +289,7 @@ class ProtobufConverterTest {
                 vBigDecimal("0.0001"),
                 vBigDecimal("123456789.987654321"),
                 vBigDecimal("1.23E-10"),
-                vBigDecimal("-999.999")
+                vBigDecimal("-999.999"),
             )
 
         val msg =
@@ -300,7 +302,7 @@ class ProtobufConverterTest {
         assertTrue(result["large_decimal"] is NumberValue)
         assertEquals(
             BigDecimal("123456789.987654321"),
-            (result["large_decimal"] as NumberValue).value
+            (result["large_decimal"] as NumberValue).value,
         )
 
         assertTrue(result["scientific_decimal"] is NumberValue)
@@ -314,7 +316,7 @@ class ProtobufConverterTest {
     fun `convertWithMetadata handles null values`() {
         val valueCoercer = createMockCoercerPassThrough()
         val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
-        val converter = ProtobufConverter(valueCoercer, validationResultHandler)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, defaultConfig)
 
         val accessors = arrayOf(fa("null_field", StringType, 0))
 
@@ -339,7 +341,7 @@ class ProtobufConverterTest {
                 every { validate(any()) } returns ValidationResult.Valid
             }
         val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
-        val converter = ProtobufConverter(valueCoercer, validationResultHandler)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, defaultConfig)
 
         val accessors = arrayOf(fa("time_field", TimeTypeWithoutTimezone, 0))
         val protoValues = listOf(vTimeNoTz(LocalTime.parse("12:34:56")))
@@ -377,7 +379,7 @@ class ProtobufConverterTest {
                         ) {
                             ValidationResult.ShouldNullify(
                                 AirbyteRecordMessageMetaChange.Reason
-                                    .DESTINATION_FIELD_SIZE_LIMITATION
+                                    .DESTINATION_FIELD_SIZE_LIMITATION,
                             )
                         } else {
                             ValidationResult.Valid
@@ -385,7 +387,7 @@ class ProtobufConverterTest {
                     }
             }
         val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
-        val converter = ProtobufConverter(valueCoercer, validationResultHandler)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, defaultConfig)
 
         val accessors = arrayOf(fa("short_string", StringType, 0), fa("long_string", StringType, 1))
         val protoValues = listOf(vString("hello"), vString("this_is_too_long"))
@@ -408,7 +410,7 @@ class ProtobufConverterTest {
         // NOTE: Column name mapping is now handled by the stream's tableSchema
         // This test has been modified to work with the new API
         val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
-        val converter = ProtobufConverter(valueCoercer, validationResultHandler)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, defaultConfig)
 
         val accessors = arrayOf(fa("original_name", StringType, 0))
         val protoValues = listOf(vString("test"))
@@ -419,7 +421,7 @@ class ProtobufConverterTest {
                 source = buildProtoSource(protoValues.map { it.build() }),
                 columnNameMapper = { columnName ->
                     if (columnName == "original_name") "mapped_name" else columnName
-                }
+                },
             )
 
         val result = converter.convert(ConversionInput(msg, PartitionKey("test-key")))
@@ -434,7 +436,7 @@ class ProtobufConverterTest {
     fun `convertWithMetadata handles parsing exceptions`() {
         val valueCoercer = createMockCoercerPassThrough()
         val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
-        val converter = ProtobufConverter(valueCoercer, validationResultHandler)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, defaultConfig)
 
         val accessors = arrayOf(fa("invalid_int", IntegerType, 0))
 
@@ -458,7 +460,7 @@ class ProtobufConverterTest {
     fun `convertWithMetadata merges meta changes from source + stream unknown changes + parsing failures`() {
         val valueCoercer = createMockCoercerPassThrough()
         val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
-        val converter = ProtobufConverter(valueCoercer, validationResultHandler)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, defaultConfig)
 
         val accessors = arrayOf(fa("ok_str", StringType, 0), fa("bad_int", IntegerType, 1))
 
@@ -468,14 +470,14 @@ class ProtobufConverterTest {
                     "x",
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED,
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType
-                        .DESTINATION_SERIALIZATION_ERROR
+                        .DESTINATION_SERIALIZATION_ERROR,
                 ),
                 metaChange(
                     "y",
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED,
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType
-                        .SOURCE_SERIALIZATION_ERROR
-                )
+                        .SOURCE_SERIALIZATION_ERROR,
+                ),
             )
 
         val invalidBigInteger =
@@ -488,8 +490,8 @@ class ProtobufConverterTest {
                 Meta.Change(
                     "unknown_field",
                     AirbyteRecordMessageMetaChange.Change.NULLED,
-                    AirbyteRecordMessageMetaChange.Reason.SOURCE_SERIALIZATION_ERROR
-                )
+                    AirbyteRecordMessageMetaChange.Reason.SOURCE_SERIALIZATION_ERROR,
+                ),
             )
 
         val msg =
@@ -499,8 +501,8 @@ class ProtobufConverterTest {
                 source =
                     buildProtoSource(
                         protoValues.map { it.build() },
-                        metaChanges = sourceSideChanges
-                    )
+                        metaChanges = sourceSideChanges,
+                    ),
             )
 
         val result = converter.convert(ConversionInput(msg, PartitionKey("test-key")))
@@ -508,5 +510,58 @@ class ProtobufConverterTest {
         val meta = result[Meta.COLUMN_NAME_AB_META] as ObjectValue
         val changes = meta.values["changes"] as ArrayValue
         assertTrue(changes.values.size >= 4)
+    }
+
+    @Test
+    fun `extractedAt returns TimestampWithTimezoneValue when config is true`() {
+        val valueCoercer = createMockCoercerPassThrough()
+        val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
+        val config = MediumConverterConfig(extractedAtAsTimestampWithTimezone = true)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, config)
+
+        val emittedAtMs = 1704067200000L // 2024-01-01T00:00:00Z
+        val accessors = arrayOf(fa("test_field", StringType, 0))
+        val protoValues = listOf(vString("test"))
+
+        val msg =
+            mockMsgWithStream(
+                accessors,
+                source =
+                    buildProtoSource(protoValues.map { it.build() }, emittedAtMs = emittedAtMs),
+            )
+
+        val result = converter.convert(ConversionInput(msg, PartitionKey("test-key")))
+
+        val extractedAt = result[Meta.COLUMN_NAME_AB_EXTRACTED_AT]
+        assertTrue(extractedAt is TimestampWithTimezoneValue)
+        assertEquals(
+            emittedAtMs,
+            (extractedAt as TimestampWithTimezoneValue).value.toInstant().toEpochMilli(),
+        )
+    }
+
+    @Test
+    fun `extractedAt returns IntegerValue when config is false`() {
+        val valueCoercer = createMockCoercerPassThrough()
+        val validationResultHandler = ValidationResultHandler(mockk(relaxed = true))
+        val config = MediumConverterConfig(extractedAtAsTimestampWithTimezone = false)
+        val converter = ProtobufConverter(valueCoercer, validationResultHandler, config)
+
+        val emittedAtMs = 1704067200000L // 2024-01-01T00:00:00Z
+        val accessors = arrayOf(fa("test_field", StringType, 0))
+        val protoValues = listOf(vString("test"))
+
+        val msg =
+            mockMsgWithStream(
+                accessors,
+                source =
+                    buildProtoSource(protoValues.map { it.build() }, emittedAtMs = emittedAtMs),
+            )
+
+        val result = converter.convert(ConversionInput(msg, PartitionKey("test-key")))
+
+        val extractedAt = result[Meta.COLUMN_NAME_AB_EXTRACTED_AT]
+        assertTrue(extractedAt is IntegerValue)
+        assertEquals(BigInteger.valueOf(emittedAtMs), (extractedAt as IntegerValue).value)
     }
 }

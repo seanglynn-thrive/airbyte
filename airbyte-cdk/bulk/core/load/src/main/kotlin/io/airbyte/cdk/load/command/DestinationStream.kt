@@ -1,11 +1,11 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.command
 
-import io.airbyte.cdk.load.data.AirbyteType
 import io.airbyte.cdk.load.data.AirbyteValueProxy
+import io.airbyte.cdk.load.data.FieldType
 import io.airbyte.cdk.load.data.ObjectType
 import io.airbyte.cdk.load.data.collectUnknownPaths
 import io.airbyte.cdk.load.data.json.AirbyteTypeToJsonSchema
@@ -18,6 +18,7 @@ import io.airbyte.protocol.models.v0.ConfiguredAirbyteStream
 import io.airbyte.protocol.models.v0.DestinationSyncMode
 import io.airbyte.protocol.models.v0.StreamDescriptor
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.util.LinkedHashMap
 
 private val log = KotlinLogging.logger {}
 
@@ -31,48 +32,42 @@ private val log = KotlinLogging.logger {}
  * mapping will be applied in the destination instead of in the orchestrator. The entails
  * - the platform will give the destination a catalog with an unmapped namespace and stream names
  * - the source will send the destination records and control messages with unmapped namespace and
- * stream names
+ *   stream names
  * - the destination will apply the namespace mapping as soon as it receives these messages (all of
- * its written data/table names/object paths will use the mapped namespace and names, same as in a
- * non-speed sync)
+ *   its written data/table names/object paths will use the mapped namespace and names, same as in a
+ *   non-speed sync)
  * - when the destination emits control messages (state, stats), it must use the *unmapped*
- * namespace and names More generally: all inter-application communication will be unmapped, all
- * communication between the connector and the destination, or between the CDK and the connector
- * code, will be mapped.
+ *   namespace and names More generally: all inter-application communication will be unmapped, all
+ *   communication between the connector and the destination, or between the CDK and the connector
+ *   code, will be mapped.
  *
  * TO MAKE THIS AS ERROR-PROOF AS POSSIBLE:
  * - every DestinationStream must be instantiated with an [unmappedName], [unmappedNamespace], AND a
- * [NamespaceMapper]
+ *   [NamespaceMapper]
  * - the default namespace mapper will be identity, and will work as expected for standard syncs
  * - [DestinationStream.Descriptor] will ALWAYS be MAPPED. (All code and tests should follow this
- * pattern.)
+ *   pattern.)
  * - [NamespaceMapper] is treated as data for the purpose of equality checks (ie, same unmapped
- * names + and same mapping rules => same stream)
+ *   names + and same mapping rules => same stream)
  * - currently this won't impact the ordering of stream names for [AirbyteValueProxy.FieldAccessor]
- * s, but only because the only stream name mapping currently supported is prepending a uniform
- * prefix. IF THAT CHANGES, PROXY FIELD ORDERING WILL BREAK.
+ *   s, but only because the only stream name mapping currently supported is prepending a uniform
+ *   prefix. IF THAT CHANGES, PROXY FIELD ORDERING WILL BREAK.
  */
 data class DestinationStream(
     val unmappedNamespace: String?,
     val unmappedName: String,
-    val importType: ImportType,
-    val schema: AirbyteType,
     val generationId: Long,
     val minimumGenerationId: Long,
     val syncId: Long,
-    // whether the stream corresponds to a series of files and their metadata
-    val isFileBased: Boolean = false,
-    // whether we will move the file (in addition to the metadata)
-    val includeFiles: Boolean = false,
-    val destinationObjectName: String? = null,
-    val matchingKey: List<String>? = null,
     private val namespaceMapper: NamespaceMapper,
     val tableSchema: StreamTableSchema,
 ) {
     val unmappedDescriptor = Descriptor(namespace = unmappedNamespace, name = unmappedName)
     val mappedDescriptor = namespaceMapper.map(namespace = unmappedNamespace, name = unmappedName)
 
-    val unknownColumnChanges by lazy { schema.computeUnknownColumnChanges() }
+    val unknownColumnChanges by lazy {
+        tableSchema.columnSchema.inputSchema.computeUnknownColumnChanges()
+    }
 
     data class Descriptor(val namespace: String?, val name: String) {
         fun asProtocolObject(): StreamDescriptor =
@@ -100,21 +95,13 @@ data class DestinationStream(
      * sockets, possibly at the expense of performance on non-socket syncs.
      */
     val airbyteValueProxyFieldAccessors: Array<AirbyteValueProxy.FieldAccessor> by lazy {
-        if (schema is ObjectType) {
-            schema.properties
-                .toList()
-                .sortedBy { (name, _) -> name }
-                .mapIndexed { index, namedType ->
-                    AirbyteValueProxy.FieldAccessor(
-                        index = index,
-                        name = namedType.first,
-                        type = namedType.second.type
-                    )
-                }
-                .toTypedArray()
-        } else {
-            emptyArray()
-        }
+        tableSchema.columnSchema.inputSchema
+            .toList()
+            .sortedBy { (name, _) -> name }
+            .mapIndexed { index, (name, fieldType) ->
+                AirbyteValueProxy.FieldAccessor(index = index, name = name, type = fieldType.type)
+            }
+            .toTypedArray()
     }
 
     /**
@@ -129,21 +116,21 @@ data class DestinationStream(
      * cursor field; we don't care about the source sync mode, we only care about the destination
      * sync mode; etc.).
      */
-    fun asProtocolObject(): ConfiguredAirbyteStream =
-        ConfiguredAirbyteStream()
+    fun asProtocolObject(): ConfiguredAirbyteStream {
+        val importType = tableSchema.importType
+        val jsonSchema =
+            AirbyteTypeToJsonSchema()
+                .convert(ObjectType(LinkedHashMap(tableSchema.columnSchema.inputSchema)))
+        return ConfiguredAirbyteStream()
             .withStream(
                 AirbyteStream()
                     .withNamespace(unmappedNamespace)
                     .withName(unmappedName)
-                    .withJsonSchema(AirbyteTypeToJsonSchema().convert(schema))
-                    .withIsFileBased(isFileBased)
+                    .withJsonSchema(jsonSchema),
             )
             .withGenerationId(generationId)
             .withMinimumGenerationId(minimumGenerationId)
             .withSyncId(syncId)
-            .withIncludeFiles(includeFiles)
-            .withDestinationObjectName(destinationObjectName)
-            .withPrimaryKey(matchingKey?.map { listOf(it) }.orEmpty())
             .apply {
                 when (importType) {
                     is Append -> {
@@ -161,9 +148,10 @@ data class DestinationStream(
                     Update -> destinationSyncMode = DestinationSyncMode.UPDATE
                 }
             }
+    }
 
     fun shouldBeTruncatedAtEndOfSync(): Boolean {
-        return importType is Overwrite ||
+        return tableSchema.importType is Overwrite ||
             (minimumGenerationId == generationId && minimumGenerationId > 0)
     }
 
@@ -175,14 +163,15 @@ data class DestinationStream(
  * This function exists so that our tests can easily mock a DestinationStream, while still getting a
  * real value for unknownColumnChanges.
  */
-fun AirbyteType.computeUnknownColumnChanges() =
-    this.collectUnknownPaths().map {
-        Meta.Change(
-            it,
-            AirbyteRecordMessageMetaChange.Change.NULLED,
-            AirbyteRecordMessageMetaChange.Reason.DESTINATION_SERIALIZATION_ERROR,
-        )
-    }
+fun Map<String, FieldType>.computeUnknownColumnChanges() =
+    this.flatMap { (name, fieldType) -> fieldType.type.collectUnknownPaths(name) }
+        .map {
+            Meta.Change(
+                it,
+                AirbyteRecordMessageMetaChange.Change.NULLED,
+                AirbyteRecordMessageMetaChange.Reason.DESTINATION_SERIALIZATION_ERROR,
+            )
+        }
 
 sealed interface ImportType
 

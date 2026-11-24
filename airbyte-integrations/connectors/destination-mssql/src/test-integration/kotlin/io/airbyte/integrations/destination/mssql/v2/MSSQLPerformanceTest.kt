@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.mssql.v2
@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test
 
 class MSSQLDataValidator(
     private val getConfiguration:
-        (spec: ConfigurationSpecification, stream: DestinationStream) -> MSSQLConfiguration
+        (spec: ConfigurationSpecification, stream: DestinationStream) -> MSSQLConfiguration,
 ) : DataValidator {
     override fun count(spec: ConfigurationSpecification, stream: DestinationStream): Long? {
         val config = getConfiguration(spec as MSSQLSpecification, stream)
@@ -31,7 +31,7 @@ class MSSQLDataValidator(
 
         return dataSource.connection.use { connection ->
             COUNT_FROM.toQuery(sqlBuilder.outputSchema, sqlBuilder.tableName).executeQuery(
-                connection
+                connection,
             ) { rs ->
                 while (rs.next()) {
                     return@executeQuery rs.getLong(1)
@@ -105,7 +105,7 @@ class MSSQLStandardInsertPerformanceTest :
 
 class MSSQLBulkInsertPerformanceTest :
     MSSQLPerformanceTest(
-        configContents = Files.readString(Path.of("secrets/bulk_upload_config.json")),
+        configContents = Files.readString(Path.of("secrets/azure_bulk_config.json")),
         configUpdater = FakeConfigurationUpdater,
         getConfiguration = { spec, _ ->
             MSSQLConfigurationFactory().makeWithOverrides(spec as MSSQLSpecification, emptyMap())

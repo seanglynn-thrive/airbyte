@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.component
@@ -19,7 +19,7 @@ class TableSchemaEvolutionClientTest {
 
             override fun computeSchema(
                 stream: DestinationStream,
-                columnNameMapping: ColumnNameMapping
+                columnNameMapping: ColumnNameMapping,
             ): TableSchema {
                 throw NotImplementedError()
             }

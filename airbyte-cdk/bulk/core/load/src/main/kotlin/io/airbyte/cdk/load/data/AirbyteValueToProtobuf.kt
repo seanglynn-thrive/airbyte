@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.data
@@ -18,6 +18,7 @@ import java.time.OffsetTime
 /** Convenience class for testing. */
 class AirbyteValueToProtobuf {
     private val encoder = AirbyteValueProtobufEncoder()
+
     fun toProtobuf(value: AirbyteValue, type: AirbyteType): AirbyteValueProtobuf {
         // Handle null values
         if (value is NullValue) {

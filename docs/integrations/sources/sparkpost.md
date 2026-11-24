@@ -6,19 +6,23 @@ The SparkPost connector for Airbyte enables seamless integration with SparkPost�
 | Input | Type | Description | Default Value |
 |-------|------|-------------|---------------|
 | `api_key` | `string` | API Key.  |  |
-| `start_date` | `string` | Start Date.  |  |
+| `start_date` | `string` | Start Date for the `message_events` stream (format `YYYY-MM-DDTHH:MM:SSZ`). SparkPost only retains events for 10 days, so earlier dates are clamped to the last 10 days.  |  |
 | `api_prefix` | `string` | API Endpoint Prefix (`api` or `api.eu`)  | api |
 
 ## Streams
 | Stream Name | Primary Key | Pagination | Supports Full Sync | Supports Incremental |
 |-------------|-------------|------------|---------------------|----------------------|
-| message_events | event_id | DefaultPaginator | ✅ |  ❌  |
+| message_events | event_id | DefaultPaginator | ✅ |  ✅  |
 | sending_domains | domain | No pagination | ✅ |  ❌  |
 | ab_test | id | No pagination | ✅ |  ❌  |
 | templates | id | No pagination | ✅ |  ❌  |
 | recipients | id | No pagination | ✅ |  ❌  |
 | subaccounts | id | DefaultPaginator | ✅ |  ❌  |
 | snippets | id | No pagination | ✅ |  ❌  |
+
+## IP allow list
+
+If you use Airbyte Cloud and your organization restricts access to specific IPs, add the [Airbyte Cloud IP addresses](https://docs.airbyte.com/platform/operating-airbyte/ip-allowlist) to your allow list.
 
 ## Changelog
 
@@ -27,6 +31,37 @@ The SparkPost connector for Airbyte enables seamless integration with SparkPost�
 
 | Version          | Date              | Pull Request | Subject        |
 |------------------|-------------------|--------------|----------------|
+| 0.0.70 | 2026-11-10 | [91738](https://github.com/airbytehq/airbyte/pull/91738) | Update dependencies |
+| 0.0.69 | 2026-11-03 | [90768](https://github.com/airbytehq/airbyte/pull/90768) | Update dependencies |
+| 0.0.68 | 2026-10-20 | [89418](https://github.com/airbytehq/airbyte/pull/89418) | Update dependencies |
+| 0.0.67 | 2026-10-13 | [88851](https://github.com/airbytehq/airbyte/pull/88851) | Update dependencies |
+| 0.0.66 | 2026-10-07 | [88218](https://github.com/airbytehq/airbyte/pull/88218) | Fix `message_events` pagination (`links.next` is an object, not a list), make the stream incremental so `start_date` is honored via `from`/`to`, fix `allowedHosts` |
+| 0.0.65 | 2026-10-06 | [88082](https://github.com/airbytehq/airbyte/pull/88082) | Update dependencies |
+| 0.0.64 | 2026-09-29 | [87392](https://github.com/airbytehq/airbyte/pull/87392) | Update dependencies |
+| 0.0.63 | 2026-09-22 | [86836](https://github.com/airbytehq/airbyte/pull/86836) | Update dependencies |
+| 0.0.62 | 2026-09-15 | [86248](https://github.com/airbytehq/airbyte/pull/86248) | Update dependencies |
+| 0.0.61 | 2026-09-08 | [85701](https://github.com/airbytehq/airbyte/pull/85701) | Update dependencies |
+| 0.0.60 | 2026-08-18 | [84789](https://github.com/airbytehq/airbyte/pull/84789) | Update dependencies |
+| 0.0.59 | 2026-08-11 | [84143](https://github.com/airbytehq/airbyte/pull/84143) | Update dependencies |
+| 0.0.58 | 2026-08-04 | [83665](https://github.com/airbytehq/airbyte/pull/83665) | Update dependencies |
+| 0.0.57 | 2026-07-28 | [83132](https://github.com/airbytehq/airbyte/pull/83132) | Update dependencies |
+| 0.0.56 | 2026-07-21 | [82601](https://github.com/airbytehq/airbyte/pull/82601) | Update dependencies |
+| 0.0.55 | 2026-07-14 | [82016](https://github.com/airbytehq/airbyte/pull/82016) | Update dependencies |
+| 0.0.54 | 2026-06-30 | [81223](https://github.com/airbytehq/airbyte/pull/81223) | Update dependencies |
+| 0.0.53 | 2026-06-23 | [80624](https://github.com/airbytehq/airbyte/pull/80624) | Update dependencies |
+| 0.0.52 | 2026-06-16 | [80043](https://github.com/airbytehq/airbyte/pull/80043) | Update dependencies |
+| 0.0.51 | 2026-06-09 | [79503](https://github.com/airbytehq/airbyte/pull/79503) | Update dependencies |
+| 0.0.50 | 2026-06-02 | [78963](https://github.com/airbytehq/airbyte/pull/78963) | Update dependencies |
+| 0.0.49 | 2026-04-28 | [77426](https://github.com/airbytehq/airbyte/pull/77426) | Update dependencies |
+| 0.0.48 | 2026-04-21 | [76748](https://github.com/airbytehq/airbyte/pull/76748) | Update dependencies |
+| 0.0.47 | 2026-03-31 | [75887](https://github.com/airbytehq/airbyte/pull/75887) | Update dependencies |
+| 0.0.46 | 2026-03-24 | [75385](https://github.com/airbytehq/airbyte/pull/75385) | Update dependencies |
+| 0.0.45 | 2026-02-24 | [73974](https://github.com/airbytehq/airbyte/pull/73974) | Update dependencies |
+| 0.0.44 | 2026-02-17 | [73441](https://github.com/airbytehq/airbyte/pull/73441) | Update dependencies |
+| 0.0.43 | 2026-02-10 | [72770](https://github.com/airbytehq/airbyte/pull/72770) | Update dependencies |
+| 0.0.42 | 2026-01-20 | [72162](https://github.com/airbytehq/airbyte/pull/72162) | Update dependencies |
+| 0.0.41 | 2026-01-14 | [71634](https://github.com/airbytehq/airbyte/pull/71634) | Update dependencies |
+| 0.0.40 | 2025-12-18 | [70605](https://github.com/airbytehq/airbyte/pull/70605) | Update dependencies |
 | 0.0.39 | 2025-11-25 | [70024](https://github.com/airbytehq/airbyte/pull/70024) | Update dependencies |
 | 0.0.38 | 2025-11-18 | [69591](https://github.com/airbytehq/airbyte/pull/69591) | Update dependencies |
 | 0.0.37 | 2025-10-29 | [68783](https://github.com/airbytehq/airbyte/pull/68783) | Update dependencies |
@@ -37,7 +72,7 @@ The SparkPost connector for Airbyte enables seamless integration with SparkPost�
 | 0.0.32 | 2025-09-24 | [66271](https://github.com/airbytehq/airbyte/pull/66271) | Update dependencies |
 | 0.0.31 | 2025-09-09 | [65714](https://github.com/airbytehq/airbyte/pull/65714) | Update dependencies |
 | 0.0.30 | 2025-08-24 | [65459](https://github.com/airbytehq/airbyte/pull/65459) | Update dependencies |
-| 0.0.29 | 2025-08-09 | [64830](https://github.com/airbytehq/airbyte/pull/64830) | Update dependencies |
+| 0.0.29 | 2025-08-10 | [64830](https://github.com/airbytehq/airbyte/pull/64830) | Update dependencies |
 | 0.0.28 | 2025-08-02 | [64415](https://github.com/airbytehq/airbyte/pull/64415) | Update dependencies |
 | 0.0.27 | 2025-07-19 | [63648](https://github.com/airbytehq/airbyte/pull/63648) | Update dependencies |
 | 0.0.26 | 2025-07-05 | [62748](https://github.com/airbytehq/airbyte/pull/62748) | Update dependencies |

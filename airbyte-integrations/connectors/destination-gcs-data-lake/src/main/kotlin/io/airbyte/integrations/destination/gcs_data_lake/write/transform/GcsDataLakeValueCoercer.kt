@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.gcs_data_lake.write.transform
@@ -39,6 +39,7 @@ class GcsDataLakeValueCoercer : ValueCoercer {
         private val MIN_DOUBLE = BigDecimal(-Double.MAX_VALUE)
         private val MAX_DOUBLE = BigDecimal(Double.MAX_VALUE)
     }
+
     override fun map(value: EnrichedAirbyteValue): EnrichedAirbyteValue {
         // Stringify union values - this happens during Parse stage where we still
         // have type information to know which fields are unions

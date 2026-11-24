@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.data
@@ -40,7 +40,7 @@ class Transformations {
             return Normalizer.normalize(s, Normalizer.Form.NFKD)
                 .replace(
                     "\\p{M}".toRegex(),
-                    ""
+                    "",
                 ) // P{M} matches a code point that is not a combining mark (unicode)
                 .replace("\\s+".toRegex(), "_")
                 .replace(NON_ALPHANUMERIC_AND_UNDERSCORE_PATTERN.toRegex(), "_")

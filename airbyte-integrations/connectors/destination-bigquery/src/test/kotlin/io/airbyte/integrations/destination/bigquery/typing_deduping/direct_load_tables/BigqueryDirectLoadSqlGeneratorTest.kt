@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.bigquery.typing_deduping.direct_load_tables
@@ -14,7 +14,7 @@ import io.airbyte.cdk.load.data.FieldType
 import io.airbyte.cdk.load.data.IntegerType
 import io.airbyte.cdk.load.data.ObjectType
 import io.airbyte.cdk.load.data.ObjectTypeWithoutSchema
-import io.airbyte.cdk.load.table.ColumnNameMapping
+import io.airbyte.cdk.load.orchestration.db.ColumnNameMapping
 import io.airbyte.integrations.destination.bigquery.write.typing_deduping.direct_load_tables.BigqueryDirectLoadSqlGenerator
 import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
@@ -33,7 +33,7 @@ class BigqueryDirectLoadSqlGeneratorTest {
                         linkedMapOf(
                             "foo" to FieldType(IntegerType, nullable = true),
                             "bar" to FieldType(IntegerType, nullable = true),
-                        )
+                        ),
                     ),
                     generationId = 42,
                     minimumGenerationId = 0,
@@ -44,8 +44,8 @@ class BigqueryDirectLoadSqlGeneratorTest {
                     mapOf(
                         "foo" to "mapped_foo",
                         "bar" to "mapped_bar",
-                    )
-                )
+                    ),
+                ),
             )
         assertEquals(listOf("_airbyte_extracted_at"), clusteringColumns)
     }
@@ -65,7 +65,7 @@ class BigqueryDirectLoadSqlGeneratorTest {
                         linkedMapOf(
                             "foo" to FieldType(IntegerType, nullable = true),
                             "bar" to FieldType(IntegerType, nullable = true),
-                        )
+                        ),
                     ),
                     generationId = 42,
                     minimumGenerationId = 0,
@@ -76,8 +76,8 @@ class BigqueryDirectLoadSqlGeneratorTest {
                     mapOf(
                         "foo" to "mapped_foo",
                         "bar" to "mapped_bar",
-                    )
-                )
+                    ),
+                ),
             )
         assertEquals(listOf("mapped_foo", "_airbyte_extracted_at"), clusteringColumns)
     }
@@ -98,7 +98,7 @@ class BigqueryDirectLoadSqlGeneratorTest {
                             linkedMapOf(
                                 "foo" to FieldType(ObjectTypeWithoutSchema, nullable = true),
                                 "bar" to FieldType(ObjectTypeWithoutSchema, nullable = true),
-                            )
+                            ),
                         ),
                         generationId = 42,
                         minimumGenerationId = 0,
@@ -109,14 +109,14 @@ class BigqueryDirectLoadSqlGeneratorTest {
                         mapOf(
                             "foo" to "mapped_foo",
                             "bar" to "mapped_bar",
-                        )
-                    )
+                        ),
+                    ),
                 )
             }
         // note: we used unmapped column names in the exception message
         assertEquals(
             "Stream ns.n: Primary key contains non-clusterable JSON-typed column [foo]",
-            e.message
+            e.message,
         )
     }
 }

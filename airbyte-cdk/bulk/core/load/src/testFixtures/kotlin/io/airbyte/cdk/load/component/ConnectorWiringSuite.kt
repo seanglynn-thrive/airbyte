@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.component
@@ -122,7 +122,7 @@ interface ConnectorWiringSuite {
             // Verify table exists
             assertTrue(
                 client.tableExists(tableName),
-                "Table ${tableName} should exist after StreamLoader.start()"
+                "Table ${tableName} should exist after StreamLoader.start()",
             )
         } finally {
             // Cleanup
@@ -167,8 +167,8 @@ interface ConnectorWiringSuite {
             val count = client.countTable(tableName)
             assertEquals(1L, count, "Should have exactly 1 record after write. Got $count records.")
 
-            // 6. Close loader
-            loader.close(hadNonzeroRecords = true, streamFailure = null)
+            // 6. Teardown loader
+            loader.teardown(completedSuccessfully = true)
         } finally {
             // Cleanup
             client.dropTable(tableName)
@@ -184,20 +184,16 @@ interface ConnectorWiringSuite {
     fun createTestStream(
         namespace: String = "test",
         name: String = "test_stream_${UUID.randomUUID()}",
-        importType: io.airbyte.cdk.load.command.ImportType = Append
+        importType: io.airbyte.cdk.load.command.ImportType = Append,
     ): DestinationStream {
+        val schema =
+            linkedMapOf(
+                "id" to FieldType(IntegerType, nullable = false),
+                "name" to FieldType(StringType, nullable = true),
+            )
         return DestinationStream(
             unmappedNamespace = namespace,
             unmappedName = name,
-            importType = importType,
-            schema =
-                ObjectType(
-                    properties =
-                        linkedMapOf(
-                            "id" to FieldType(IntegerType, nullable = false),
-                            "name" to FieldType(StringType, nullable = true)
-                        )
-                ),
             generationId = 0,
             minimumGenerationId = 0,
             syncId = 42,
@@ -206,12 +202,12 @@ interface ConnectorWiringSuite {
                 StreamTableSchema(
                     columnSchema =
                         ColumnSchema(
-                            inputSchema = mapOf(),
-                            inputToFinalColumnNames = mapOf(),
+                            inputSchema = schema,
+                            inputToFinalColumnNames = schema.keys.associateWith { it },
                             finalSchema = mapOf(),
                         ),
-                    importType = Append,
-                    tableNames = TableNames(finalTableName = TableName("namespace", "test")),
+                    importType = importType,
+                    tableNames = TableNames(finalTableName = TableName(namespace, name)),
                 ),
         )
     }
@@ -249,11 +245,11 @@ interface ConnectorWiringSuite {
                     "_airbyte_raw_id" to StringValue(UUID.randomUUID().toString()),
                     "_airbyte_extracted_at" to TimestampWithTimezoneValue("2024-01-01T00:00:00Z"),
                     "_airbyte_meta" to ObjectValue(linkedMapOf()),
-                    "_airbyte_generation_id" to IntegerValue(0)
+                    "_airbyte_generation_id" to IntegerValue(0),
                 ),
             partitionKey = PartitionKey(""), // Empty partition for non-partitioned streams
             sizeBytes = 100,
-            emittedAtMs = System.currentTimeMillis()
+            emittedAtMs = System.currentTimeMillis(),
         )
     }
 }

@@ -2,6 +2,7 @@
 # Copyright (c) 2025 Airbyte, Inc., all rights reserved.
 #
 
+import codecs
 import io
 import json
 import logging
@@ -9,23 +10,28 @@ import re
 import threading
 from dataclasses import dataclass, field
 from itertools import groupby
-from typing import Any, Callable, Dict, Generator, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
+from typing import Any, Callable, ClassVar, Dict, Generator, Iterable, List, Mapping, MutableMapping, Optional, Set, Tuple, Union
 
 import anyascii
 import requests
+from requests.adapters import HTTPAdapter
 
 from airbyte_cdk import AirbyteTracedException, FailureType, InterpolatedString
 from airbyte_cdk.sources.declarative.decoders.composite_raw_decoder import JsonParser
 from airbyte_cdk.sources.declarative.decoders.decoder import Decoder
+from airbyte_cdk.sources.declarative.extractors.dpath_extractor import DpathExtractor
 from airbyte_cdk.sources.declarative.extractors.record_extractor import RecordExtractor
 from airbyte_cdk.sources.declarative.extractors.record_filter import RecordFilter
 from airbyte_cdk.sources.declarative.migrations.state_migration import StateMigration
 from airbyte_cdk.sources.declarative.requesters.http_requester import HttpRequester
+from airbyte_cdk.sources.declarative.retrievers.request_window_splitting import RequestWindowSplitting
 from airbyte_cdk.sources.declarative.retrievers.simple_retriever import SimpleRetriever
 from airbyte_cdk.sources.declarative.schema import SchemaLoader
 from airbyte_cdk.sources.declarative.schema.inline_schema_loader import InlineSchemaLoader
 from airbyte_cdk.sources.declarative.transformations import RecordTransformation
+from airbyte_cdk.sources.streams.concurrent.cursor import Cursor
 from airbyte_cdk.sources.streams.concurrent.default_stream import DefaultStream
+from airbyte_cdk.sources.streams.http.request_window_split_exception import RequestWindowSplitRequiredException
 from airbyte_cdk.sources.types import Config, Record, StreamSlice, StreamState
 from airbyte_cdk.sources.utils.transform import TransformConfig, TypeTransformer
 
@@ -34,13 +40,50 @@ from .google_ads import GoogleAds
 
 logger = logging.getLogger("airbyte")
 
+# Default socket-level timeout (in seconds) for all Google Ads API HTTP calls.
+# This is an idle timeout per recv() call, not a total request timeout,
+# so streaming responses that keep sending data are unaffected.
+DEFAULT_HTTP_TIMEOUT = 300  # 5 minutes
+
+
+class TimeoutHTTPAdapter(HTTPAdapter):
+    """
+    HTTP adapter that enforces a default socket timeout on every request.
+    Prevents workers from hanging indefinitely on unresponsive API calls.
+    """
+
+    def __init__(self, timeout: int = DEFAULT_HTTP_TIMEOUT, *args: Any, **kwargs: Any) -> None:
+        self.timeout = timeout
+        super().__init__(*args, **kwargs)
+
+    def send(self, request: requests.PreparedRequest, **kwargs: Any) -> requests.Response:  # type: ignore[override]
+        kwargs.setdefault("timeout", self.timeout)
+        return super().send(request, **kwargs)
+
+
+def _mount_timeout_adapter(requester: Any) -> None:
+    """Mount `TimeoutHTTPAdapter` on a requester's HTTP session.
+
+    Ensures every Google Ads HTTP call has a default socket-level idle timeout,
+    including parent-stream fetches that route through the stock CDK `HttpRequester`
+    (e.g. `customer_client`, `customer_client_non_manager`, `accessible_accounts`).
+    """
+    http_client = getattr(requester, "_http_client", None)
+    session = getattr(http_client, "_session", None) if http_client is not None else None
+    if session is not None:
+        session.mount("https://", TimeoutHTTPAdapter(timeout=DEFAULT_HTTP_TIMEOUT))
+
+
 REPORT_MAPPING = {
     "account_performance_report": "customer",
     "ad_group_ad_legacy": "ad_group_ad",
+    "ad_performance": "ad_group_ad",
     "ad_group_bidding_strategy": "ad_group",
     "ad_listing_group_criterion": "ad_group_criterion",
     "campaign_real_time_bidding_settings": "campaign",
     "campaign_bidding_strategy": "campaign",
+    "geographic_view_with_metrics": "geographic_view",
+    "geo_performance": "geographic_view",
     "service_accounts": "customer",
 }
 
@@ -144,6 +187,55 @@ class FlattenNestedDictsTransformation(RecordTransformation):
             _flatten(top_key, nested)
 
 
+@dataclass
+class SerializeMessageFieldsTransformation(RecordTransformation):
+    """
+    Serializes MESSAGE-type fields (nested dict values) to JSON strings before
+    flattening occurs. This prevents FlattenNestedDictsTransformation from
+    recursively flattening MESSAGE fields like change_event.old_resource and
+    change_event.new_resource, which would create sub-keys not present in
+    the schema and cause the original field values to be lost (returned as NULL).
+
+    This transformation must run AFTER KeysToSnakeCaseGoogleAdsTransformation
+    and BEFORE FlattenNestedDictsTransformation in the custom query stream
+    transformation chain.
+
+    The set of MESSAGE-type field names is populated by
+    CustomGAQuerySchemaLoader.get_json_schema() during stream initialization
+    and stored on the CustomGAQuerySchemaLoader class.
+    """
+
+    def transform(
+        self,
+        record: Dict[str, Any],
+        config: Optional[Config] = None,
+        stream_state: Optional[StreamState] = None,
+        stream_slice: Optional[StreamSlice] = None,
+    ) -> None:
+        message_fields: set = CustomGAQuerySchemaLoader._all_message_fields
+        if not message_fields:
+            return
+
+        for field_name in message_fields:
+            parts = field_name.split(".")
+            current = record
+            for part in parts[:-1]:
+                if isinstance(current, dict) and part in current:
+                    current = current[part]
+                else:
+                    current = None
+                    break
+
+            if current is not None and isinstance(current, dict):
+                last_part = parts[-1]
+                if last_part in current:
+                    value = current[last_part]
+                    if isinstance(value, dict):
+                        current[last_part] = json.dumps(value)
+                    elif isinstance(value, list):
+                        current[last_part] = [json.dumps(item) if isinstance(item, dict) else item for item in value]
+
+
 class DoubleQuotedDictTypeTransformer(TypeTransformer):
     """
     Convert arrays of dicts into JSON-formatted string arrays using double quotes only
@@ -232,7 +324,9 @@ class GoogleAdsPerPartitionStateMigration(StateMigration):
         self._cursor_field = cursor_field
 
     def should_migrate(self, stream_state: Mapping[str, Any]) -> bool:
-        return stream_state and "state" not in stream_state
+        if not stream_state:
+            return False
+        return not any(key in stream_state for key in ("state", "states", "use_global_cursor"))
 
     def _read_parent_stream(self) -> Iterable[Record]:
         for partition in self._parent_stream.generate_partitions():
@@ -291,6 +385,7 @@ class GoogleAdsHttpRequester(HttpRequester):
     def __post_init__(self, parameters: Mapping[str, Any]) -> None:
         super().__post_init__(parameters)
         self.stream_response = True
+        _mount_timeout_adapter(self)
 
     def get_request_body_json(
         self,
@@ -450,12 +545,20 @@ class CriterionRetriever(SimpleRetriever):
     Retrieves Criterion records based on ChangeStatus updates.
 
     For each parent_slice:
-      1) Emits a “deleted” record for any REMOVED status.
+      1) Emits a "deleted" record for any REMOVED status.
       2) Batches the remaining IDs into a single fetch.
       3) Attaches the original ChangeStatus timestamp to each returned record.
     """
 
     cursor_field: str = "change_status.last_change_date_time"
+
+    def __post_init__(self, parameters: Mapping[str, Any]) -> None:
+        super().__post_init__(parameters)
+        # CustomRequester requires a name at init time but the real stream name is only
+        # available after the retriever is fully constructed; propagate it here.
+        if hasattr(self.requester, "name"):
+            self.requester.name = self.name
+        _mount_timeout_adapter(self.requester)
 
     def _read_pages(
         self,
@@ -514,6 +617,104 @@ class CriterionRetriever(SimpleRetriever):
                 # attach timestamp from ChangeStatus
                 rec.data[self.cursor_field] = time_map.get(rec.data.get(self.primary_key[0]))
                 yield rec
+
+
+@dataclass
+class GoogleAdsRetriever(SimpleRetriever):
+    """
+    Custom retriever for Google Ads that recovers from a ChunkedEncodingError (or a read timeout's
+    ConnectionError) raised while a large report is streamed.
+
+    When the window can still be halved, the error is turned into the CDK's
+    RequestWindowSplitRequiredException and SimpleRetriever splits the date window with the stream's
+    own cursor and reads each half in turn, down to cursor_granularity (1 day). A window that cannot be
+    split any further (a 1-day window, or a stream whose cursor cannot split) is retried in place up to
+    MAX_RETRIES times before failing with a transient error: a mid-stream drop is a transport blip, so the
+    same window usually succeeds on the next attempt.
+
+    The splitting is wired here rather than through `request_window_splitting` in the manifest: the CDK
+    does not build that block for a CustomRetriever, so this class takes the stream cursor through the
+    `cursor` field (the factory passes it to every retriever) and binds the splitter itself.
+
+    Note: if the error occurs after some records have already been yielded, those records are re-emitted
+    when the window is split or retried. Primary keys only remove them in deduplicated sync modes; plain
+    Append keeps them on every stream.
+    """
+
+    MAX_RETRIES: ClassVar[int] = 3
+
+    decoder: Decoder | None = None
+    cursor: Optional[Cursor] = None
+    request_window_splitting: Optional[RequestWindowSplitting] = RequestWindowSplitting()
+
+    def __post_init__(self, parameters: Mapping[str, Any]) -> None:
+        super().__post_init__(parameters)
+        if hasattr(self.requester, "name"):
+            self.requester.name = self.name
+        if self.decoder and isinstance(self.record_selector.extractor, DpathExtractor):
+            self.record_selector.extractor.decoder = self.decoder
+        _mount_timeout_adapter(self.requester)
+        # Streams without incremental_sync get a FinalStateCursor, which has no `split_request_window`; the criterion
+        # streams' full refresh branch gets a per-partition cursor without cursor_granularity, whose splitter returns
+        # None. Both retry in place.
+        self.request_window_splitter = getattr(self.cursor, "split_request_window", None)
+
+    def _read_pages(
+        self,
+        records_generator_fn: Callable[[Optional[Mapping]], Iterable[Record]],
+        stream_slice: StreamSlice,
+    ) -> Iterable[Record]:
+        yield from self._read_pages_with_retry(records_generator_fn, stream_slice, retry_count=0)
+
+    def _read_pages_with_retry(
+        self,
+        records_generator_fn: Callable[[Optional[Mapping]], Iterable[Record]],
+        stream_slice: StreamSlice,
+        retry_count: int,
+    ) -> Iterable[Record]:
+        try:
+            yield from super()._read_pages(records_generator_fn, stream_slice)
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError) as error:
+            # ConnectionError here is a stall past the idle timeout (iter_content); HttpClient retries and wraps pre-header ones.
+            if self._can_split_window(stream_slice):
+                logger.warning(f"Response stream was interrupted for {stream_slice.cursor_slice}; splitting the window: {error}")
+                raise RequestWindowSplitRequiredException(stream_name=self.name, error_message=str(error)) from error
+
+            start, end = stream_slice.cursor_slice.get("start_time"), stream_slice.cursor_slice.get("end_time")
+            at_minimum_window = bool(start) and start == end
+            if retry_count < self.MAX_RETRIES:
+                if at_minimum_window:
+                    logger.warning(f"{type(error).__name__} on minimum slice size (1 day). Retry {retry_count + 1}/{self.MAX_RETRIES}...")
+                else:
+                    logger.warning(
+                        f"{type(error).__name__} on slice without date boundaries (full refresh stream). "
+                        f"Retry {retry_count + 1}/{self.MAX_RETRIES}..."
+                    )
+                yield from self._read_pages_with_retry(records_generator_fn, stream_slice, retry_count + 1)
+                return
+
+            if at_minimum_window:
+                raise AirbyteTracedException(
+                    message="Response stream was interrupted. The slice is already at minimum size (1 day) "
+                    f"and {self.MAX_RETRIES} retries were exhausted.",
+                    internal_message=f"{type(error).__name__} persisted after {self.MAX_RETRIES} retries on minimum slice.",
+                    failure_type=FailureType.transient_error,
+                ) from error
+            raise AirbyteTracedException(
+                message=f"Response stream was interrupted. {self.MAX_RETRIES} retries were exhausted.",
+                internal_message=f"{type(error).__name__} persisted after {self.MAX_RETRIES} retries on full refresh slice.",
+                failure_type=FailureType.transient_error,
+            ) from error
+
+    def _can_split_window(self, stream_slice: StreamSlice) -> bool:
+        """
+        Ask the cursor whether `stream_slice` can still be halved, with the same `min_split_window` the CDK
+        will use. The cursor owns the floor: no splitter (FinalStateCursor), no `cursor_granularity`, or a window
+        already at one granularity unit all answer `None`.
+        """
+        if self.request_window_splitter is None or self.request_window_splitting is None:
+            return False
+        return self.request_window_splitter(stream_slice, self.request_window_splitting.min_split_window) is not None
 
 
 @dataclass
@@ -697,6 +898,8 @@ class CustomGAQueryHttpRequester(HttpRequester):
     def __post_init__(self, parameters: Mapping[str, Any]):
         super().__post_init__(parameters=parameters)
         self.query = GAQL.parse(parameters.get("query"))
+        self.stream_response = True
+        _mount_timeout_adapter(self)
 
     @staticmethod
     def is_metrics_in_custom_query(query: GAQL) -> bool:
@@ -761,6 +964,17 @@ class CustomGAQueryHttpRequester(HttpRequester):
         return self.query[from_index + 4 :].strip()
 
 
+class CustomGAQueryClickViewHttpRequester(CustomGAQueryHttpRequester):
+    @staticmethod
+    def _insert_segments_date_expr(query: GAQL, start_date: str, end_date: str) -> GAQL:
+        if "segments.date" not in query.fields:
+            query = query.append_field("segments.date")
+        condition = f"segments.date ='{start_date}'"
+        if query.where:
+            return query.set_where(query.where + " AND " + condition)
+        return query.set_where(condition)
+
+
 @dataclass()
 class CustomGAQuerySchemaLoader(SchemaLoader):
     """
@@ -774,6 +988,7 @@ class CustomGAQuerySchemaLoader(SchemaLoader):
 
     _google_ads_client: Optional[GoogleAds] = None
     _client_lock = threading.Lock()
+    _all_message_fields: ClassVar[Set[str]] = set()
 
     def __post_init__(self):
         self._cursor_field = InterpolatedString.create(self.cursor_field, parameters={}) if self.cursor_field else None
@@ -810,10 +1025,14 @@ class CustomGAQuerySchemaLoader(SchemaLoader):
         fields = self._get_list_of_fields()
         fields_metadata = self.google_ads_client(self.config).get_fields_metadata(fields)
 
+        message_fields: set = set()
         for field, field_metadata in fields_metadata.items():
+            if field_metadata.data_type.name == "MESSAGE":
+                message_fields.add(field)
             field_value = self._build_field_value(field, field_metadata)
             local_json_schema["properties"][field] = field_value
 
+        CustomGAQuerySchemaLoader._all_message_fields = CustomGAQuerySchemaLoader._all_message_fields | message_fields
         return local_json_schema
 
     def _build_field_value(self, field: str, field_metadata) -> Any:
@@ -861,8 +1080,8 @@ class CustomGAQuerySchemaLoader(SchemaLoader):
         except ValueError:
             raise AirbyteTracedException(
                 failure_type=FailureType.config_error,
-                internal_message=f"The provided query is invalid: {query}. Please refer to the Google Ads API documentation for the correct syntax: https://developers.google.com/google-ads/api/fields/v20/overview and test validate your query using the Google Ads Query Builder: https://developers.google.com/google-ads/api/fields/v20/query_validator",
-                message=f"The provided query is invalid: {query}. Please refer to the Google Ads API documentation for the correct syntax: https://developers.google.com/google-ads/api/fields/v20/overview and test validate your query using the Google Ads Query Builder: https://developers.google.com/google-ads/api/fields/v20/query_validator",
+                internal_message=f"The provided query is invalid: {query}. Please refer to the Google Ads API documentation for the correct syntax: https://developers.google.com/google-ads/api/fields/v23/overview and test validate your query using the Google Ads Query Builder: https://developers.google.com/google-ads/api/fields/v23/query_validator",
+                message=f"The provided query is invalid: {query}. Please refer to the Google Ads API documentation for the correct syntax: https://developers.google.com/google-ads/api/fields/v23/overview and test validate your query using the Google Ads Query Builder: https://developers.google.com/google-ads/api/fields/v23/query_validator",
             )
 
 
@@ -949,9 +1168,15 @@ class GoogleAdsStreamingDecoder(Decoder):
         results_state = ResultsArrayState()
         record_state = RecordParseState()
         top_level_state = TopLevelObjectState()
+        decoder = codecs.getincrementaldecoder(encoding)(errors="replace")
 
-        for chunk in byte_iter:
-            for char in chunk.decode(encoding, errors="replace"):
+        def decoded_chunks() -> Iterable[str]:
+            for chunk in byte_iter:
+                yield decoder.decode(chunk)
+            yield decoder.decode(b"", final=True)
+
+        for decoded_chunk in decoded_chunks():
+            for char in decoded_chunk:
                 self._append_to_current_record_if_any(char, record_state)
 
                 if self._update_string_state(char, string_state):

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.state.stats
@@ -37,7 +37,7 @@ class StateStatsEnricher(
         msg: CheckpointMessage,
         desc: DestinationStream.Descriptor,
         partitionKeys: List<PartitionKey>,
-        count: Long
+        count: Long,
     ): CheckpointMessage {
         // TODO: set this using the count above once we get to total rejected
         // records.
@@ -54,7 +54,7 @@ class StateStatsEnricher(
     @Suppress("UNUSED_PARAMETER")
     fun enrichTopLevelDestinationStatsGlobalState(
         msg: CheckpointMessage,
-        count: Long
+        count: Long,
     ): CheckpointMessage {
         // TODO: set this using the count above once we get to total rejected
         // records.

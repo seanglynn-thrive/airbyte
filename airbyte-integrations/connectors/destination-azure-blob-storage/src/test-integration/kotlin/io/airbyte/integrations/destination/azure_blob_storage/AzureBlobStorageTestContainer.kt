@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.azure_blob_storage
@@ -29,6 +29,7 @@ object AzureBlobStorageTestContainer {
             client.serviceClient.createBlobContainer(CONTAINER_NAME)
         }
     }
+
     // intentionally no stop method - testcontainers automatically stop when their parent java
     // process exits (via ryuk)
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 package io.airbyte.integrations.destination.teradata.typing_deduping
 
@@ -166,7 +166,7 @@ class ClearScapeManager(private val configFileName: String) {
             teradataHttpClient.deleteEnvironment(request, token).get()
         } catch (be: BaseException) {
             LOGGER.info(
-                "Environment ${configJSON["env_name"].asText()} is not available. Error - ${be.message}"
+                "Environment ${configJSON["env_name"].asText()} is not available. Error - ${be.message}",
             )
         }
     }

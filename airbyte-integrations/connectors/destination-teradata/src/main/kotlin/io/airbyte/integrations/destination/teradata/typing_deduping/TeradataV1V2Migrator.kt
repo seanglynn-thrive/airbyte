@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.teradata.typing_deduping
@@ -29,20 +29,20 @@ class TeradataV1V2Migrator(database: JdbcDatabase) :
      * @param namespace The namespace (schema) of the table.
      * @param tableName The name of the table.
      * @return An `Optional` containing the `TableDefinition` if the table exists, or an empty
-     * `Optional` if not.
+     *   `Optional` if not.
      * @throws Exception If there is an error while fetching the table.
      */
     @SneakyThrows
     @Throws(Exception::class)
     override fun getTableIfExists(
         namespace: String?,
-        tableName: String?
+        tableName: String?,
     ): Optional<TableDefinition> {
         return JdbcDestinationHandler.Companion.findExistingTable(
             database,
             namespace,
             null,
-            tableName
+            tableName,
         )
     }
 

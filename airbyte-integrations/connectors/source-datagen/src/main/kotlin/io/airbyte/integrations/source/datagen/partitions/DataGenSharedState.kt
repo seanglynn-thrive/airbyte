@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.source.datagen.partitions
@@ -15,7 +15,7 @@ import jakarta.inject.Singleton
 class DataGenSharedState(
     val configuration: DataGenSourceConfiguration,
     val concurrencyResource: ConcurrencyResource,
-    val resourceAcquirer: ResourceAcquirer
+    val resourceAcquirer: ResourceAcquirer,
 ) {
     fun tryAcquireResourcesForCreator(): DataGenPartitionsCreator.AcquiredResources? {
         val acquiredThread: ConcurrencyResource.AcquiredThread =
@@ -24,7 +24,7 @@ class DataGenSharedState(
     }
 
     fun tryAcquireResourcesForReader(
-        resourceTypes: List<ResourceType>
+        resourceTypes: List<ResourceType>,
     ): Map<ResourceType, DataGenPartitionReader.AcquiredResource>? {
         val acquiredResources: Map<ResourceType, Resource.Acquired>? =
             resourceAcquirer.tryAcquire(resourceTypes)
@@ -33,6 +33,7 @@ class DataGenSharedState(
                 it.key to
                     object : DataGenPartitionReader.AcquiredResource {
                         override val resource: Resource.Acquired = it.value
+
                         override fun close() {
                             resource.close()
                         }

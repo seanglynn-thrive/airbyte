@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.gcs_data_lake
@@ -14,9 +14,14 @@ import io.airbyte.cdk.load.data.icerberg.parquet.IcebergConfigUpdater
 import io.airbyte.cdk.load.data.icerberg.parquet.IcebergDataDumper
 import io.airbyte.cdk.load.data.icerberg.parquet.IcebergExpectedRecordMapper
 import io.airbyte.cdk.load.message.InputRecord
+import io.airbyte.cdk.load.table.DefaultTempTableNameGenerator
 import io.airbyte.cdk.load.test.util.OutputRecord
 import io.airbyte.cdk.load.write.*
 import io.airbyte.integrations.destination.gcs_data_lake.catalog.BigLakeTableIdGenerator
+import io.airbyte.integrations.destination.gcs_data_lake.schema.GcsDataLakeTableSchemaMapper
+import io.airbyte.integrations.destination.gcs_data_lake.spec.BigLakeCatalogConfiguration
+import io.airbyte.integrations.destination.gcs_data_lake.spec.GcsCatalogConfiguration
+import io.airbyte.integrations.destination.gcs_data_lake.spec.GcsDataLakeConfiguration
 import io.airbyte.integrations.destination.gcs_data_lake.spec.GcsDataLakeSpecification
 import java.nio.file.Files
 import kotlin.test.assertContains
@@ -38,11 +43,32 @@ class BigLakeWriteTest :
             BigLakeDataDumper(
                 delegateDataDumper =
                     IcebergDataDumper(
-                        tableIdGenerator = BigLakeTableIdGenerator("test_database"),
+                        tableIdGenerator =
+                            BigLakeTableIdGenerator(
+                                GcsDataLakeTableSchemaMapper(
+                                    // STUB: the only thing we actually use is `namespace`
+                                    GcsDataLakeConfiguration(
+                                        gcsBucketName = "",
+                                        serviceAccountJson = "",
+                                        gcpProjectId = null,
+                                        gcpLocation = "",
+                                        gcsEndpoint = null,
+                                        namespace = "test_database",
+                                        gcsCatalogConfiguration =
+                                            GcsCatalogConfiguration(
+                                                warehouseLocation = "",
+                                                mainBranchName = "",
+                                                catalogConfiguration =
+                                                    BigLakeCatalogConfiguration("", ""),
+                                            ),
+                                    ),
+                                    tempTableNameGenerator = DefaultTempTableNameGenerator(),
+                                ),
+                            ),
                         getCatalog = { spec ->
                             GcsDataLakeTestUtil.getCatalog(GcsDataLakeTestUtil.getConfig(spec))
-                        }
-                    )
+                        },
+                    ),
             ),
         destinationCleaner = GcsDataLakeCleaner,
         recordMangler = IcebergExpectedRecordMapper,
@@ -53,14 +79,12 @@ class BigLakeWriteTest :
         schematizedObjectBehavior = SchematizedNestedValueBehavior.STRINGIFY,
         schematizedArrayBehavior = SchematizedNestedValueBehavior.PASS_THROUGH,
         unionBehavior = UnionBehavior.STRINGIFY,
-        supportFileTransfer = false,
         commitDataIncrementally = false,
         allTypesBehavior =
             StronglyTyped(integerCanBeLarge = false, nestedFloatLosesPrecision = false),
         unknownTypesBehavior = UnknownTypesBehavior.PASS_THROUGH,
         nullEqualsUnset = true,
         configUpdater = IcebergConfigUpdater,
-        useDataFlowPipeline = true
     ) {
 
     @Test
@@ -73,12 +97,11 @@ class BigLakeWriteTest :
             DestinationStream(
                 unmappedNamespace = randomizedNamespace + namespaceSuffix,
                 unmappedName = name,
-                Append,
-                ObjectType(linkedMapOf("id" to intType)),
                 generationId = 0,
                 minimumGenerationId = 0,
                 syncId = 42,
-                namespaceMapper = NamespaceMapper()
+                namespaceMapper = NamespaceMapper(),
+                tableSchema = makeTableSchema(ObjectType(linkedMapOf("id" to intType)), Append),
             )
         // Glue downcases stream IDs, and also coerces to alphanumeric+underscore.
         // So these two streams will collide.
@@ -87,7 +110,7 @@ class BigLakeWriteTest :
                 listOf(
                     makeStream("stream_with_spécial_character+", "_FOO"),
                     makeStream("stream_with_spécial_character$", "_FOO"),
-                )
+                ),
             )
 
         val failure = expectFailure { runSync(updatedConfig, catalog, messages = emptyList()) }
@@ -116,17 +139,16 @@ class BigLakeWriteTest :
             DestinationStream(
                 unmappedNamespace = randomizedNamespace,
                 unmappedName = "test_stream",
-                Append,
-                ObjectType(schema),
                 generationId = 0,
                 minimumGenerationId = 0,
-                syncId,
-                namespaceMapper = NamespaceMapper()
+                syncId = syncId,
+                namespaceMapper = NamespaceMapper(),
+                tableSchema = makeTableSchema(ObjectType(schema), Append),
             )
         val firstStream =
             makeStream(
                 syncId = 42,
-                linkedMapOf("id" to intType, "to_drop" to stringType, "same" to intType)
+                linkedMapOf("id" to intType, "to_drop" to stringType, "same" to intType),
             )
         runSync(
             updatedConfig,
@@ -136,13 +158,13 @@ class BigLakeWriteTest :
                     firstStream,
                     """{"id": 42, "to_drop": "val1", "same": 42}""",
                     emittedAtMs = 1234L,
-                )
-            )
+                ),
+            ),
         )
         val finalStream =
             makeStream(
                 syncId = 43,
-                linkedMapOf("id" to intType, "same" to intType, "to_add" to stringType)
+                linkedMapOf("id" to intType, "same" to intType, "to_add" to stringType),
             )
         runSync(
             updatedConfig,
@@ -152,8 +174,8 @@ class BigLakeWriteTest :
                     finalStream,
                     """{"id": 42, "same": "43", "to_add": "val3"}""",
                     emittedAtMs = 1234,
-                )
-            )
+                ),
+            ),
         )
         dumpAndDiffRecords(
             parsedConfig,
@@ -169,7 +191,7 @@ class BigLakeWriteTest :
                     generationId = 0,
                     data = mapOf("id" to 42, "same" to 43, "to_add" to "val3"),
                     airbyteMeta = OutputRecord.Meta(syncId = 43),
-                )
+                ),
             ),
             finalStream,
             primaryKey = listOf(listOf("id")),

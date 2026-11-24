@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.table
@@ -54,15 +54,10 @@ abstract class BaseDirectLoadInitialStatusGatherer(
     }
 
     private suspend fun getTableStatus(tableName: TableName): DirectLoadTableStatus? {
-        val numberOfRecords: Long? = tableOperationsClient.countTable(tableName)
-        return when (numberOfRecords) {
-            // Missing table
-            null -> null
-            // Empty Table
-            0L -> DirectLoadTableStatus(isEmpty = true)
-            // Non-empty Table
-            else -> DirectLoadTableStatus(isEmpty = false)
+        if (!tableOperationsClient.tableExists(tableName)) {
+            return null
         }
+        return DirectLoadTableStatus(isEmpty = tableOperationsClient.tableIsEmpty(tableName))
     }
 
     private suspend fun getInitialStatus(names: TableNames): DirectLoadInitialStatus {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.state
@@ -180,7 +180,7 @@ class StateHistogramStoreTest {
         // Then
         assertEquals(expectedCount, count)
         assertFalse(
-            stateHistogramStore.isComplete(stateKey)
+            stateHistogramStore.isComplete(stateKey),
         ) // Should be false due to missing expected count
     }
 

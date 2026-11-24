@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.gcs_data_lake.write
@@ -7,9 +7,7 @@ package io.airbyte.integrations.destination.gcs_data_lake.write
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
 import io.airbyte.cdk.load.command.Dedupe
 import io.airbyte.cdk.load.command.DestinationStream
-import io.airbyte.cdk.load.dataflow.transform.ColumnNameMapper
 import io.airbyte.cdk.load.message.Meta
-import io.airbyte.cdk.load.state.StreamProcessingFailed
 import io.airbyte.cdk.load.toolkits.iceberg.parquet.ColumnTypeChangeBehavior
 import io.airbyte.cdk.load.toolkits.iceberg.parquet.IcebergTableSynchronizer
 import io.airbyte.cdk.load.toolkits.iceberg.parquet.io.IcebergTableCleaner
@@ -26,14 +24,12 @@ import org.apache.iceberg.types.Types
 
 private val logger = KotlinLogging.logger {}
 
-@SuppressFBWarnings("NP_NONNULL_PARAM_VIOLATION", justification = "Kotlin async continuation")
 class GcsDataLakeStreamLoader(
     private val icebergConfiguration: GcsDataLakeConfiguration,
     override val stream: DestinationStream,
     private val icebergTableSynchronizer: IcebergTableSynchronizer,
     private val gcsDataLakeCatalogUtil: GcsDataLakeCatalogUtil,
     private val icebergUtil: IcebergUtil,
-    private val columnNameMapper: ColumnNameMapper,
     private val stagingBranchName: String,
     private val mainBranchName: String,
     private val streamStateStore: StreamStateStore<GcsDataLakeStreamState>,
@@ -55,63 +51,23 @@ class GcsDataLakeStreamLoader(
         icebergUtil.toIcebergSchema(stream = stream).let { schema ->
             // Transform the schema to use mapped column names for BigLake compatibility.
             // BigLake rejects table creation with special characters in column names.
-            transformSchemaWithMappedNames(schema, withIdentifierFields)
+            transformSchemaWithMappedNames(
+                schema,
+                stream.tableSchema.columnSchema.inputToFinalColumnNames,
+                withIdentifierFields,
+            )
         }
-
-    /**
-     * Transforms an Iceberg schema to use mapped column names. This ensures column names are
-     * BigLake-compatible (alphanumeric + underscore only).
-     */
-    private fun transformSchemaWithMappedNames(
-        schema: Schema,
-        withIdentifierFields: Boolean
-    ): Schema {
-        val mappedFields =
-            schema.asStruct().fields().map { field ->
-                val originalName = field.name()
-
-                // Skip Airbyte metadata columns - they're already valid
-                if (Meta.COLUMN_NAMES.contains(originalName)) {
-                    return@map field
-                }
-
-                val mappedName = columnNameMapper.getMappedColumnName(stream, originalName)
-
-                if (mappedName != originalName) {
-                    Types.NestedField.of(
-                        field.fieldId(),
-                        field.isOptional,
-                        mappedName,
-                        field.type(),
-                        field.doc()
-                    )
-                } else {
-                    field
-                }
-            }
-
-        // Don't set identifier fields during table creation - BigLake corrupts them.
-        // We'll reconcile them after the table is created.
-        return Schema(
-            mappedFields,
-            if (withIdentifierFields) {
-                schema.identifierFieldIds()
-            } else {
-                emptySet()
-            },
-        )
-    }
 
     @SuppressFBWarnings(
         "RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE",
-        "something about the `table` lateinit var is confusing spotbugs"
+        "something about the `table` lateinit var is confusing spotbugs",
     )
     override suspend fun start() {
         val properties = gcsDataLakeCatalogUtil.toCatalogProperties(config = icebergConfiguration)
         val catalog =
             icebergUtil.createCatalog(
                 io.airbyte.integrations.destination.gcs_data_lake.spec.DEFAULT_CATALOG_NAME,
-                properties
+                properties,
             )
         gcsDataLakeCatalogUtil.createNamespace(stream.mappedDescriptor, catalog)
         table =
@@ -124,13 +80,14 @@ class GcsDataLakeStreamLoader(
         // Reconcile identifier fields after BigLake creates the table
         // BigLake reassigns field IDs, so we need to update the schema with the correct field names
         val primaryKeyNames =
-            when (val importType = stream.importType) {
+            when (val importType = stream.tableSchema.importType) {
                 is Dedupe -> {
                     importType.primaryKey.flatten().map { originalName ->
                         if (Meta.COLUMN_NAMES.contains(originalName)) {
                             originalName
                         } else {
-                            columnNameMapper.getMappedColumnName(stream, originalName)
+                            stream.tableSchema.columnSchema.inputToFinalColumnNames[originalName]
+                                ?: originalName
                         }
                     }
                 }
@@ -199,8 +156,8 @@ class GcsDataLakeStreamLoader(
         streamStateStore.put(stream.mappedDescriptor, state)
     }
 
-    override suspend fun close(hadNonzeroRecords: Boolean, streamFailure: StreamProcessingFailed?) {
-        if (streamFailure == null) {
+    override suspend fun teardown(completedSuccessfully: Boolean) {
+        if (completedSuccessfully) {
             // Doing it first to make sure that data coming in the current batch is written to the
             // main branch
             logger.info {
@@ -263,4 +220,57 @@ class GcsDataLakeStreamLoader(
             // in a single transaction, even with different field IDs.
             requireSeparateCommitsForColumnReplace = true,
         )
+}
+
+/**
+ * Transforms an Iceberg schema to use mapped column names. This ensures column names are
+ * BigLake-compatible (alphanumeric + underscore only).
+ */
+internal fun transformSchemaWithMappedNames(
+    schema: Schema,
+    inputToFinalColumnNames: Map<String, String>,
+    withIdentifierFields: Boolean,
+): Schema {
+    val mappedFields =
+        schema.asStruct().fields().map { field ->
+            val originalName = field.name()
+
+            // Skip Airbyte metadata columns - they're already valid
+            if (Meta.COLUMN_NAMES.contains(originalName)) {
+                return@map field
+            }
+
+            val mappedName = inputToFinalColumnNames[originalName] ?: originalName
+
+            if (mappedName != originalName) {
+                if (field.isOptional) {
+                    Types.NestedField.optional(
+                        field.fieldId(),
+                        mappedName,
+                        field.type(),
+                        field.doc(),
+                    )
+                } else {
+                    Types.NestedField.required(
+                        field.fieldId(),
+                        mappedName,
+                        field.type(),
+                        field.doc(),
+                    )
+                }
+            } else {
+                field
+            }
+        }
+
+    // Don't set identifier fields during table creation - BigLake corrupts them.
+    // We'll reconcile them after the table is created.
+    return Schema(
+        mappedFields,
+        if (withIdentifierFields) {
+            schema.identifierFieldIds()
+        } else {
+            emptySet()
+        },
+    )
 }

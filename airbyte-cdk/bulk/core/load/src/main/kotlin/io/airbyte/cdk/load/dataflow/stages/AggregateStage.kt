@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.stages
@@ -29,7 +29,7 @@ class AggregateStage(
                     partitionCountsHistogram = next.partitionCountsHistogram,
                     partitionBytesHistogram = next.partitionBytesHistogram,
                     mappedDesc = next.key,
-                )
+                ),
             )
             next = store.removeNextComplete(rec.emittedAtMs)
         }

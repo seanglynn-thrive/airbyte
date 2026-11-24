@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.test.fixtures.legacy
@@ -16,18 +16,9 @@ import java.util.*
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder("executionUrl", "executionBody", "webhookConfigId")
 class OperatorWebhook : Serializable {
-    /**
-     *
-     * (Required)
-     */
-    /**
-     *
-     * (Required)
-     */
-    /**
-     *
-     * (Required)
-     */
+    /** (Required) */
+    /** (Required) */
+    /** (Required) */
     @get:JsonProperty("executionUrl")
     @set:JsonProperty("executionUrl")
     @JsonProperty("executionUrl")
@@ -96,7 +87,7 @@ class OperatorWebhook : Serializable {
         sb.append("additionalProperties")
         sb.append('=')
         sb.append(
-            (if ((this.additionalProperties == null)) "<null>" else this.additionalProperties)
+            (if ((this.additionalProperties == null)) "<null>" else this.additionalProperties),
         )
         sb.append(',')
         if (sb[sb.length - 1] == ',') {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 plugins {
@@ -11,7 +11,8 @@ plugins {
 
 airbyteBulkConnector {
     core = "load"
-    toolkits = listOf("load-csv", "load-dlq", "load-http", "load-low-code")
+    toolkits = listOf("load-csv", "legacy-task-load-dlq", "load-http", "legacy-task-load-low-code")
+    useLegacyTaskLoader = true
 }
 
 application {
@@ -34,7 +35,7 @@ application {
 }
 
 val junitVersion = "5.11.4"
-val testContainersVersion = "1.20.5"
+val testContainersVersion = "1.21.4"
 
 configurations.configureEach {
     // Exclude additional SLF4J providers from all classpaths
@@ -53,7 +54,7 @@ dependencies {
     implementation("io.micronaut:micronaut-inject:4.7.12")
     implementation("org.apache.commons:commons-lang3:3.17.0")
 
-    testImplementation("io.mockk:mockk:1.13.16")
+    testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$junitVersion")

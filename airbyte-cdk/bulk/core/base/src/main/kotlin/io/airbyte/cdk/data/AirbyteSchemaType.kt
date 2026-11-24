@@ -1,4 +1,4 @@
-/* Copyright (c) 2024 Airbyte, Inc., all rights reserved. */
+/* Copyright (c) 2026 Airbyte, Inc., all rights reserved. */
 package io.airbyte.cdk.data
 
 import com.fasterxml.jackson.databind.JsonNode
@@ -43,8 +43,7 @@ enum class LeafAirbyteSchemaType(
     INTEGER(JsonSchemaType.INTEGER),
     NUMBER(JsonSchemaType.NUMBER),
     NULL(JsonSchemaType.NULL),
-    JSONB(JsonSchemaType.JSONB),
-    ;
+    JSONB(JsonSchemaType.JSONB);
 
     override fun asJsonSchemaType(): JsonSchemaType = jsonSchemaType
 }

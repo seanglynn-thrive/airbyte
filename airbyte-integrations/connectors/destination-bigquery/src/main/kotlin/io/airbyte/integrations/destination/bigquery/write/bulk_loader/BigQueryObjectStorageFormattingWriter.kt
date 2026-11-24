@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.bigquery.write.bulk_loader
@@ -42,7 +42,7 @@ class BigQueryObjectStorageFormattingWriter(
 @Singleton
 class BigQueryObjectStorageFormattingWriterFactory(
     private val config: BigqueryConfiguration,
-    @Named("dataChannelFormat") private val dataChannelFormat: DataChannelFormat
+    @Named("dataChannelFormat") private val dataChannelFormat: DataChannelFormat,
 ) : ObjectStorageFormattingWriterFactory {
     override fun create(
         stream: DestinationStream,

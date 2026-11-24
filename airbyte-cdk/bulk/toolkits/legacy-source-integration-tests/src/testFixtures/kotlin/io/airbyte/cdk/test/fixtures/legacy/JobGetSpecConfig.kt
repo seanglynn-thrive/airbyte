@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.test.fixtures.legacy
@@ -18,22 +18,14 @@ import java.io.Serializable
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder("dockerImage", "isCustomConnector")
 class JobGetSpecConfig : Serializable {
-    /**
-     *
-     * (Required)
-     */
-    /**
-     *
-     * (Required)
-     */
-    /**
-     *
-     * (Required)
-     */
+    /** (Required) */
+    /** (Required) */
+    /** (Required) */
     @get:JsonProperty("dockerImage")
     @set:JsonProperty("dockerImage")
     @JsonProperty("dockerImage")
     var dockerImage: String? = null
+
     /** determine if the running image is a custom connector. */
     /** determine if the running image is a custom connector. */
     /** determine if the running image is a custom connector. */

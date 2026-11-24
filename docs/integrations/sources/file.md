@@ -291,6 +291,10 @@ In order to read large files from a remote location, this connector uses the [sm
 
 </HideInUI>
 
+## IP allow list
+
+If you use Airbyte Cloud and your organization restricts access to specific IPs, add the [Airbyte Cloud IP addresses](https://docs.airbyte.com/platform/operating-airbyte/ip-allowlist) to your allow list.
+
 ## Changelog
 
 <details>
@@ -298,6 +302,8 @@ In order to read large files from a remote location, this connector uses the [sm
 
 | Version    | Date       | Pull Request                                             | Subject                                                                                                                                                                |
 |:-----------|:-----------|:---------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0.6.2      | 2026-11-13 | [83742](https://github.com/airbytehq/airbyte/pull/83742) | Surface S3 credential and permission failures as actionable configuration errors instead of generic system errors.                                                     |
+| 0.6.1      | 2026-11-04 | [91047](https://github.com/airbytehq/airbyte/pull/91047) | Raise minimum supported Python version to 3.11 |
 | 0.6.0      | 2025-11-03 | [69148](https://github.com/airbytehq/airbyte/pull/69148) | Promoting release candidate 0.6.0-rc.1 to a main version.                                                                                                                                             |
 | 0.6.0-rc.1 | 2025-10-22 | [68588](https://github.com/airbytehq/airbyte/pull/68588) | Update to airbyte-cdk ^v7                                                                                                                                              |
 | 0.5.46     | 2025-10-21 | [68484](https://github.com/airbytehq/airbyte/pull/68484) | Update dependencies                                                                                                                                                    |
@@ -392,7 +398,7 @@ In order to read large files from a remote location, this connector uses the [sm
 | 0.2.16     | 2022-08-10 | [15293](https://github.com/airbytehq/airbyte/pull/15293) | Add support for encoding reader option                                                                                                                                 |
 | 0.2.15     | 2022-08-05 | [15269](https://github.com/airbytehq/airbyte/pull/15269) | Bump `smart-open` version to 6.0.0                                                                                                                                     |
 | 0.2.12     | 2022-07-12 | [14535](https://github.com/airbytehq/airbyte/pull/14535) | Fix invalid schema generation for JSON files                                                                                                                           |
-| 0.2.11     | 2022-07-12 | [9974](https://github.com/airbytehq/airbyte/pull/14588)  | Add support to YAML format                                                                                                                                             |
+| 0.2.11     | 2022-07-12 | [14588](https://github.com/airbytehq/airbyte/pull/14588)  | Add support to YAML format                                                                                                                                             |
 | 0.2.9      | 2022-02-01 | [9974](https://github.com/airbytehq/airbyte/pull/9974)   | Update airbyte-cdk 0.1.47                                                                                                                                              |
 | 0.2.8      | 2021-12-06 | [8524](https://github.com/airbytehq/airbyte/pull/8524)   | Update connector fields title/description                                                                                                                              |
 | 0.2.7      | 2021-10-28 | [7387](https://github.com/airbytehq/airbyte/pull/7387)   | Migrate source to CDK structure, add SAT testing.                                                                                                                      |

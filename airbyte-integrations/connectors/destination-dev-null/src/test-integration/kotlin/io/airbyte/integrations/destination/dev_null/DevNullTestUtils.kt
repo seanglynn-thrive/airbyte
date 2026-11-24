@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.dev_null
@@ -25,7 +25,9 @@ object DevNullTestUtils {
      */
     val loggingConfigPath: Path = Path.of("test_configs/logging.json")
     val silentConfigPath: Path = Path.of("test_configs/silent.json")
+
     fun configContents(configPath: Path): String = Files.readString(configPath, Charsets.UTF_8)
+
     val loggingConfig: DevNullSpecification =
         ValidatedJsonUtils.parseOne(
             DevNullSpecificationOss::class.java,

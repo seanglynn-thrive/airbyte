@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.data
@@ -18,16 +18,27 @@ import java.math.BigInteger
  */
 interface AirbyteValueProxy {
     fun getBoolean(field: FieldAccessor): Boolean?
+
     fun getString(field: FieldAccessor): String?
+
     fun getInteger(field: FieldAccessor): BigInteger?
+
     fun getNumber(field: FieldAccessor): BigDecimal?
+
     fun getDate(field: FieldAccessor): String?
+
     fun getTimeWithTimezone(field: FieldAccessor): String?
+
     fun getTimeWithoutTimezone(field: FieldAccessor): String?
+
     fun getTimestampWithTimezone(field: FieldAccessor): String?
+
     fun getTimestampWithoutTimezone(field: FieldAccessor): String?
+
     fun getJsonBytes(field: FieldAccessor): ByteArray?
+
     fun getJsonNode(field: FieldAccessor): JsonNode?
+
     data class FieldAccessor(val index: Int, val name: String, val type: AirbyteType)
 }
 

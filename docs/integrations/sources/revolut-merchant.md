@@ -16,6 +16,7 @@ You can find more about the API here https://developer.revolut.com/docs/merchant
 
 | Input | Type | Description | Default Value |
 |-------|------|-------------|---------------|
+| `api_version` | `string` | API Version. Value of the `Revolut-Api-Version` header sent with every request. Example: `2024-09-01`. |  |
 | `secret_api_key` | `string` | Secret API Key. Secret API key to use for authenticating with the Revolut Merchant API. Find it in your Revolut Business account under APIs > Merchant API. |  |
 | `start_date` | `string` | Start date.  |  |
 | `environment` | `string` | environment. The base url of your environment. Either sandbox or production |  |
@@ -27,6 +28,10 @@ You can find more about the API here https://developer.revolut.com/docs/merchant
 | customers | id | No pagination | ✅ |  ❌  |
 | locations | id | No pagination | ✅ |  ❌  |
 
+## IP allow list
+
+If you use Airbyte Cloud and your organization restricts access to specific IPs, add the [Airbyte Cloud IP addresses](https://docs.airbyte.com/platform/operating-airbyte/ip-allowlist) to your allow list.
+
 ## Changelog
 
 <details>
@@ -34,6 +39,38 @@ You can find more about the API here https://developer.revolut.com/docs/merchant
 
 | Version          | Date              | Pull Request | Subject        |
 |------------------|-------------------|--------------|----------------|
+| 0.0.71 | 2026-11-17 | [93351](https://github.com/airbytehq/airbyte/pull/93351) | Update dependencies |
+| 0.0.70 | 2026-11-10 | [91690](https://github.com/airbytehq/airbyte/pull/91690) | Update dependencies |
+| 0.0.69 | 2026-11-03 | [90707](https://github.com/airbytehq/airbyte/pull/90707) | Update dependencies |
+| 0.0.68 | 2026-10-20 | [89381](https://github.com/airbytehq/airbyte/pull/89381) | Update dependencies |
+| 0.0.67 | 2026-10-13 | [88772](https://github.com/airbytehq/airbyte/pull/88772) | Update dependencies |
+| 0.0.66 | 2026-10-07 | [88338](https://github.com/airbytehq/airbyte/pull/88338) | Fix `orders` pagination: page with `created_before` cursor instead of an unsupported offset |
+| 0.0.65 | 2026-10-06 | [88000](https://github.com/airbytehq/airbyte/pull/88000) | Update dependencies |
+| 0.0.64 | 2026-09-29 | [87321](https://github.com/airbytehq/airbyte/pull/87321) | Update dependencies |
+| 0.0.63 | 2026-09-22 | [86774](https://github.com/airbytehq/airbyte/pull/86774) | Update dependencies |
+| 0.0.62 | 2026-09-15 | [86231](https://github.com/airbytehq/airbyte/pull/86231) | Update dependencies |
+| 0.0.61 | 2026-09-08 | [85660](https://github.com/airbytehq/airbyte/pull/85660) | Update dependencies |
+| 0.0.60 | 2026-08-18 | [84733](https://github.com/airbytehq/airbyte/pull/84733) | Update dependencies |
+| 0.0.59 | 2026-08-11 | [84087](https://github.com/airbytehq/airbyte/pull/84087) | Update dependencies |
+| 0.0.58 | 2026-08-04 | [83602](https://github.com/airbytehq/airbyte/pull/83602) | Update dependencies |
+| 0.0.57 | 2026-07-28 | [83113](https://github.com/airbytehq/airbyte/pull/83113) | Update dependencies |
+| 0.0.56 | 2026-07-21 | [82606](https://github.com/airbytehq/airbyte/pull/82606) | Update dependencies |
+| 0.0.55 | 2026-07-14 | [81978](https://github.com/airbytehq/airbyte/pull/81978) | Update dependencies |
+| 0.0.54 | 2026-07-07 | [81214](https://github.com/airbytehq/airbyte/pull/81214) | Update dependencies |
+| 0.0.53 | 2026-06-23 | [80616](https://github.com/airbytehq/airbyte/pull/80616) | Update dependencies |
+| 0.0.52 | 2026-06-16 | [80032](https://github.com/airbytehq/airbyte/pull/80032) | Update dependencies |
+| 0.0.51 | 2026-06-09 | [79481](https://github.com/airbytehq/airbyte/pull/79481) | Update dependencies |
+| 0.0.50 | 2026-06-02 | [78934](https://github.com/airbytehq/airbyte/pull/78934) | Update dependencies |
+| 0.0.49 | 2026-04-28 | [77471](https://github.com/airbytehq/airbyte/pull/77471) | Update dependencies |
+| 0.0.48 | 2026-04-21 | [76732](https://github.com/airbytehq/airbyte/pull/76732) | Update dependencies |
+| 0.0.47 | 2026-03-31 | [75821](https://github.com/airbytehq/airbyte/pull/75821) | Update dependencies |
+| 0.0.46 | 2026-03-17 | [74960](https://github.com/airbytehq/airbyte/pull/74960) | Update dependencies |
+| 0.0.45 | 2026-03-10 | [74689](https://github.com/airbytehq/airbyte/pull/74689) | Update dependencies |
+| 0.0.44 | 2026-02-24 | [73771](https://github.com/airbytehq/airbyte/pull/73771) | Update dependencies |
+| 0.0.43 | 2026-02-17 | [72674](https://github.com/airbytehq/airbyte/pull/72674) | Update dependencies |
+| 0.0.42 | 2026-01-20 | [72042](https://github.com/airbytehq/airbyte/pull/72042) | Update dependencies |
+| 0.0.41 | 2026-01-14 | [71455](https://github.com/airbytehq/airbyte/pull/71455) | Update dependencies |
+| 0.0.40 | 2025-12-18 | [70740](https://github.com/airbytehq/airbyte/pull/70740) | Update dependencies |
 | 0.0.39 | 2025-11-25 | [70002](https://github.com/airbytehq/airbyte/pull/70002) | Update dependencies |
 | 0.0.38 | 2025-11-18 | [69616](https://github.com/airbytehq/airbyte/pull/69616) | Update dependencies |
 | 0.0.37 | 2025-10-29 | [68905](https://github.com/airbytehq/airbyte/pull/68905) | Update dependencies |
@@ -43,7 +80,7 @@ You can find more about the API here https://developer.revolut.com/docs/merchant
 | 0.0.33 | 2025-09-30 | [66435](https://github.com/airbytehq/airbyte/pull/66435) | Update dependencies |
 | 0.0.32 | 2025-09-09 | [65668](https://github.com/airbytehq/airbyte/pull/65668) | Update dependencies |
 | 0.0.31 | 2025-08-24 | [65499](https://github.com/airbytehq/airbyte/pull/65499) | Update dependencies |
-| 0.0.30 | 2025-08-09 | [64848](https://github.com/airbytehq/airbyte/pull/64848) | Update dependencies |
+| 0.0.30 | 2025-08-10 | [64848](https://github.com/airbytehq/airbyte/pull/64848) | Update dependencies |
 | 0.0.29 | 2025-08-02 | [64444](https://github.com/airbytehq/airbyte/pull/64444) | Update dependencies |
 | 0.0.28 | 2025-07-05 | [62722](https://github.com/airbytehq/airbyte/pull/62722) | Update dependencies |
 | 0.0.27 | 2025-06-28 | [62219](https://github.com/airbytehq/airbyte/pull/62219) | Update dependencies |

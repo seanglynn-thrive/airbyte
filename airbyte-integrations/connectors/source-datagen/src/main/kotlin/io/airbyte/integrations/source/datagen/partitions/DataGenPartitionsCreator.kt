@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.source.datagen.partitions
@@ -10,13 +10,14 @@ import java.util.concurrent.atomic.AtomicReference
 
 class DataGenPartitionsCreator(
     val partition: DataGenSourcePartition,
-    val partitionFactory: DataGenSourcePartitionFactory
+    val partitionFactory: DataGenSourcePartitionFactory,
 ) : PartitionsCreator {
 
     val streamState: DataGenStreamState = partition.streamState
     val sharedState: DataGenSharedState = streamState.sharedState
 
     private val acquiredResources = AtomicReference<AcquiredResources?>()
+
     fun interface AcquiredResources : AutoCloseable
 
     override fun tryAcquireResources(): PartitionsCreator.TryAcquireResourcesStatus {
@@ -29,8 +30,9 @@ class DataGenPartitionsCreator(
 
     override suspend fun run(): List<PartitionReader> {
         val splitPartitions = partitionFactory.split(partition)
-        val partitionReaders =
-            splitPartitions.map { splitPartition -> DataGenPartitionReader(splitPartition) }
+        val partitionReaders = splitPartitions.map { splitPartition ->
+            DataGenPartitionReader(splitPartition)
+        }
         return partitionReaders
     }
 

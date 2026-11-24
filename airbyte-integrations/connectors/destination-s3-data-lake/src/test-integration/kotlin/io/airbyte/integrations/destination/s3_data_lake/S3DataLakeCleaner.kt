@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.s3_data_lake
@@ -19,7 +19,7 @@ object S3DataLakeCleaner : DestinationCleaner {
                 IcebergDestinationCleaner(
                     S3DataLakeTestUtil.getCatalog(
                         S3DataLakeTestUtil.parseConfig(
-                            S3DataLakeTestUtil.GLUE_ASSUME_ROLE_CONFIG_PATH
+                            S3DataLakeTestUtil.GLUE_ASSUME_ROLE_CONFIG_PATH,
                         ),
                         S3DataLakeTestUtil.getAwsAssumeRoleCredentials(),
                     ),

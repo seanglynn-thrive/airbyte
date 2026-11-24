@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.s3_v2
@@ -40,6 +40,7 @@ object S3V2TestUtils {
 
     private const val ASSUME_ROLE_INTERNAL_CREDENTIALS_SECRET_PATH =
         "secrets/s3_dest_iam_role_credentials_for_assume_role_auth.json"
+
     init {
         val parsedAssumeRoleCreds =
             Jsons.readTree(Files.readString(Path.of(ASSUME_ROLE_INTERNAL_CREDENTIALS_SECRET_PATH)))

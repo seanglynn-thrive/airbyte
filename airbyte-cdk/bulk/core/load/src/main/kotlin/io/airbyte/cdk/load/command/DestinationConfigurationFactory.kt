@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.command
@@ -9,7 +9,9 @@ import io.airbyte.cdk.ConnectorErrorException
 import io.airbyte.cdk.command.ConfigurationSpecification
 
 interface DestinationConfigurationFactory<
-    I : ConfigurationSpecification, O : DestinationConfiguration> {
+    I : ConfigurationSpecification,
+    O : DestinationConfiguration,
+> {
     fun makeWithoutExceptionHandling(pojo: I): O
 
     /** Wraps [makeWithoutExceptionHandling] exceptions in [ConfigErrorException]. */

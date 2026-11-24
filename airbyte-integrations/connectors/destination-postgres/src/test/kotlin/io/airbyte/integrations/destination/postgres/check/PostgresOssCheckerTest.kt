@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.postgres.check
 
 import io.airbyte.cdk.load.command.DestinationStream
+import io.airbyte.cdk.load.schema.model.TableName
 import io.airbyte.cdk.load.table.ColumnNameMapping
-import io.airbyte.cdk.load.table.TableName
 import io.airbyte.integrations.destination.postgres.client.PostgresAirbyteClient
 import io.airbyte.integrations.destination.postgres.spec.PostgresConfiguration
 import io.mockk.coEvery
@@ -51,7 +51,7 @@ internal class PostgresOssCheckerTest {
                 stream = any<DestinationStream>(),
                 tableName = any<TableName>(),
                 columnNameMapping = any<ColumnNameMapping>(),
-                replace = true
+                replace = true,
             )
         }
     }
@@ -72,7 +72,7 @@ internal class PostgresOssCheckerTest {
 
         assertEquals(
             "Failed to insert expected rows into check table. Actual written: 0",
-            exception.message
+            exception.message,
         )
 
         coVerify(exactly = 1) { postgresAirbyteClient.createNamespace(schema) }
@@ -81,7 +81,7 @@ internal class PostgresOssCheckerTest {
                 stream = any<DestinationStream>(),
                 tableName = any<TableName>(),
                 columnNameMapping = any<ColumnNameMapping>(),
-                replace = true
+                replace = true,
             )
         }
         coVerify(exactly = 1) { postgresAirbyteClient.dropTable(any()) }

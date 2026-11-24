@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 package io.airbyte.integrations.destination.bigquery
 
@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test
 internal class BigQuerySQLNameTransformerTest {
     @Test
     fun testGetNamespace() {
-        RAW_TO_NORMALIZED_NAMESPACES.forEach { (raw: String?, normalized: String?) ->
+        RAW_TO_NORMALIZED_NAMESPACES.forEach { (raw, normalized) ->
             Assertions.assertEquals(normalized, INSTANCE.getNamespace(raw))
         }
     }
@@ -29,7 +29,7 @@ internal class BigQuerySQLNameTransformerTest {
                 "*_namespace",
                 "n__namespace",
                 "_namespace",
-                "n_namespace"
+                "n_namespace",
             )
     }
 }

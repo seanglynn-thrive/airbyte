@@ -1,4 +1,4 @@
-/* Copyright (c) 2025 Airbyte, Inc., all rights reserved. */
+/* Copyright (c) 2026 Airbyte, Inc., all rights reserved. */
 package io.airbyte.integrations.source.mssql
 
 import io.airbyte.cdk.testcontainers.TestContainerFactory
@@ -39,7 +39,7 @@ object MsSqlServerContainerFactory {
                 container.password,
                 "-Q",
                 "CREATE DATABASE test",
-                "-C"
+                "-C",
             )
         }
     }
@@ -64,7 +64,7 @@ object MsSqlServerContainerFactory {
 
     @JvmStatic
     fun config(
-        msSQLContainer: MSSQLServerContainer<*>
+        msSQLContainer: MSSQLServerContainer<*>,
     ): MsSqlServerSourceConfigurationSpecification =
         MsSqlServerSourceConfigurationSpecification().apply {
             host = msSQLContainer.host

@@ -1,11 +1,10 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.command
 
 import io.airbyte.cdk.load.config.NamespaceDefinitionType
-import io.airbyte.cdk.load.data.ObjectType
 import io.airbyte.cdk.load.schema.model.ColumnSchema
 import io.airbyte.cdk.load.schema.model.StreamTableSchema
 import io.airbyte.cdk.load.schema.model.TableName
@@ -17,16 +16,14 @@ class NamespaceMapperTest {
     private fun makeStream(
         unmappedNamespace: String,
         unmappedName: String,
-        namespaceMapper: NamespaceMapper
+        namespaceMapper: NamespaceMapper,
     ): DestinationStream {
         return DestinationStream(
             unmappedNamespace = unmappedNamespace,
             unmappedName = unmappedName,
-            importType = Append,
             generationId = 1,
             minimumGenerationId = 0,
             syncId = 1,
-            schema = ObjectType(linkedMapOf()),
             namespaceMapper = namespaceMapper,
             tableSchema =
                 StreamTableSchema(
@@ -39,7 +36,7 @@ class NamespaceMapperTest {
                             finalSchema = mapOf(),
                         ),
                     importType = Append,
-                )
+                ),
         )
     }
 
@@ -54,7 +51,7 @@ class NamespaceMapperTest {
             )
         Assertions.assertEquals(
             DestinationStream.Descriptor("namespace", "name"),
-            stream.mappedDescriptor
+            stream.mappedDescriptor,
         )
     }
 
@@ -69,7 +66,7 @@ class NamespaceMapperTest {
             )
         Assertions.assertEquals(
             DestinationStream.Descriptor("namespace", "prefix_name"),
-            stream.mappedDescriptor
+            stream.mappedDescriptor,
         )
     }
 
@@ -84,11 +81,11 @@ class NamespaceMapperTest {
             makeStream(
                 unmappedNamespace = "namespace",
                 unmappedName = "name",
-                namespaceMapper = mapper
+                namespaceMapper = mapper,
             )
         Assertions.assertEquals(
             DestinationStream.Descriptor("namespace", "name"),
-            stream.mappedDescriptor
+            stream.mappedDescriptor,
         )
     }
 
@@ -107,7 +104,7 @@ class NamespaceMapperTest {
             )
         Assertions.assertEquals(
             DestinationStream.Descriptor("custom_format_namespace", "name"),
-            stream.mappedDescriptor
+            stream.mappedDescriptor,
         )
     }
 
@@ -141,7 +138,7 @@ class NamespaceMapperTest {
             )
         Assertions.assertEquals(
             DestinationStream.Descriptor(null, "prefix_name"),
-            stream.mappedDescriptor
+            stream.mappedDescriptor,
         )
     }
 }

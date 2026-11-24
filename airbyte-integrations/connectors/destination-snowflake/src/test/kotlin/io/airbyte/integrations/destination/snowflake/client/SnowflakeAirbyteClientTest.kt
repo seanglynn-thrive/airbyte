@@ -1,34 +1,31 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.snowflake.client
 
 import io.airbyte.cdk.ConfigErrorException
 import io.airbyte.cdk.load.command.DestinationStream
-import io.airbyte.cdk.load.command.NamespaceMapper
-import io.airbyte.cdk.load.command.Overwrite
 import io.airbyte.cdk.load.component.ColumnType
-import io.airbyte.cdk.load.config.NamespaceDefinitionType
-import io.airbyte.cdk.load.data.AirbyteType
-import io.airbyte.cdk.load.data.FieldType
+import io.airbyte.cdk.load.message.Meta.Companion.COLUMN_NAME_AB_EXTRACTED_AT
 import io.airbyte.cdk.load.message.Meta.Companion.COLUMN_NAME_AB_GENERATION_ID
+import io.airbyte.cdk.load.message.Meta.Companion.COLUMN_NAME_AB_LOADED_AT
+import io.airbyte.cdk.load.message.Meta.Companion.COLUMN_NAME_AB_META
 import io.airbyte.cdk.load.message.Meta.Companion.COLUMN_NAME_AB_RAW_ID
+import io.airbyte.cdk.load.schema.model.TableName
 import io.airbyte.cdk.load.table.ColumnNameMapping
-import io.airbyte.cdk.load.table.TableName
-import io.airbyte.integrations.destination.snowflake.db.ColumnDefinition
-import io.airbyte.integrations.destination.snowflake.db.toSnowflakeCompatibleName
+import io.airbyte.integrations.destination.snowflake.schema.SnowflakeColumnManager
+import io.airbyte.integrations.destination.snowflake.schema.toSnowflakeCompatibleName
 import io.airbyte.integrations.destination.snowflake.spec.SnowflakeConfiguration
 import io.airbyte.integrations.destination.snowflake.sql.COUNT_TOTAL_ALIAS
-import io.airbyte.integrations.destination.snowflake.sql.ColumnAndType
-import io.airbyte.integrations.destination.snowflake.sql.DEFAULT_COLUMNS
 import io.airbyte.integrations.destination.snowflake.sql.QUOTE
-import io.airbyte.integrations.destination.snowflake.sql.SnowflakeColumnUtils
+import io.airbyte.integrations.destination.snowflake.sql.SnowflakeDataType
 import io.airbyte.integrations.destination.snowflake.sql.SnowflakeDirectLoadSqlGenerator
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import io.mockk.verify
 import java.sql.Connection
 import java.sql.PreparedStatement
@@ -49,30 +46,23 @@ internal class SnowflakeAirbyteClientTest {
     private lateinit var client: SnowflakeAirbyteClient
     private lateinit var dataSource: DataSource
     private lateinit var sqlGenerator: SnowflakeDirectLoadSqlGenerator
-    private lateinit var snowflakeColumnUtils: SnowflakeColumnUtils
     private lateinit var snowflakeConfiguration: SnowflakeConfiguration
+    private lateinit var columnManager: SnowflakeColumnManager
 
     @BeforeEach
     fun setup() {
         dataSource = mockk()
         sqlGenerator = mockk(relaxed = true)
-        snowflakeColumnUtils =
-            mockk(relaxed = true) {
-                every { formatColumnName(any()) } answers
-                    {
-                        firstArg<String>().toSnowflakeCompatibleName()
-                    }
-                every { getFormattedDefaultColumnNames(any()) } returns
-                    DEFAULT_COLUMNS.map { it.columnName.toSnowflakeCompatibleName() }
-            }
         snowflakeConfiguration =
             mockk(relaxed = true) { every { database } returns "test_database" }
+        columnManager = mockk(relaxed = true)
         client =
             SnowflakeAirbyteClient(
                 dataSource,
                 sqlGenerator,
-                snowflakeColumnUtils,
-                snowflakeConfiguration
+                snowflakeConfiguration,
+                columnManager,
+                metaColumnRepairEnabled = false,
             )
     }
 
@@ -89,9 +79,16 @@ internal class SnowflakeAirbyteClientTest {
                 every { executeQuery(any()) } returns resultSet
                 every { close() } just Runs
             }
+        val preparedStatement =
+            mockk<PreparedStatement> {
+                every { setString(any(), any()) } just runs
+                every { executeQuery().next() } returns true
+                every { close() } just runs
+            }
         val mockConnection =
             mockk<Connection> {
                 every { close() } just Runs
+                every { prepareStatement(any()) } returns preparedStatement
                 every { createStatement() } returns statement
             }
 
@@ -100,19 +97,23 @@ internal class SnowflakeAirbyteClientTest {
         runBlocking {
             val result = client.countTable(tableName)
             assertEquals(1L, result)
-            verify(exactly = 1) { mockConnection.close() }
+            verify(exactly = 2) { mockConnection.close() }
         }
     }
 
     @Test
     fun testCountMissingTable() {
         val tableName = TableName(namespace = "namespace", name = "name")
-        val statement =
-            mockk<Statement> { every { executeQuery(any()) } throws SnowflakeSQLException("test") }
+        val preparedStatement =
+            mockk<PreparedStatement> {
+                every { setString(any(), any()) } just runs
+                every { executeQuery().next() } returns false
+                every { close() } just runs
+            }
         val mockConnection =
             mockk<Connection> {
                 every { close() } just Runs
-                every { createStatement() } returns statement
+                every { prepareStatement(any()) } returns preparedStatement
             }
 
         every { dataSource.connection } returns mockConnection
@@ -133,9 +134,16 @@ internal class SnowflakeAirbyteClientTest {
                 every { executeQuery(any()) } returns resultSet
                 every { close() } just Runs
             }
+        val preparedStatement =
+            mockk<PreparedStatement> {
+                every { setString(any(), any()) } just runs
+                every { executeQuery().next() } returns true
+                every { close() } just runs
+            }
         val mockConnection =
             mockk<Connection> {
                 every { close() } just Runs
+                every { prepareStatement(any()) } returns preparedStatement
                 every { createStatement() } returns statement
             }
 
@@ -144,7 +152,7 @@ internal class SnowflakeAirbyteClientTest {
         runBlocking {
             val result = client.countTable(tableName)
             assertEquals(0L, result)
-            verify(exactly = 1) { mockConnection.close() }
+            verify(exactly = 2) { mockConnection.close() }
         }
     }
 
@@ -231,7 +239,7 @@ internal class SnowflakeAirbyteClientTest {
     @Test
     fun testCreateTable() {
         val columnNameMapping = mockk<ColumnNameMapping>(relaxed = true)
-        val stream = mockk<DestinationStream>()
+        val stream = mockk<DestinationStream>(relaxed = true)
         val tableName = TableName(namespace = "namespace", name = "name")
         val resultSet = mockk<ResultSet>(relaxed = true)
         val statement =
@@ -254,9 +262,7 @@ internal class SnowflakeAirbyteClientTest {
                 columnNameMapping = columnNameMapping,
                 replace = true,
             )
-            verify(exactly = 1) {
-                sqlGenerator.createTable(stream, tableName, columnNameMapping, true)
-            }
+            verify(exactly = 1) { sqlGenerator.createTable(tableName, any(), true) }
             verify(exactly = 1) { sqlGenerator.createSnowflakeStage(tableName) }
             verify(exactly = 2) { mockConnection.close() }
         }
@@ -288,7 +294,7 @@ internal class SnowflakeAirbyteClientTest {
                 targetTableName = destinationTableName,
             )
             verify(exactly = 1) {
-                sqlGenerator.copyTable(columnNameMapping, sourceTableName, destinationTableName)
+                sqlGenerator.copyTable(any<Set<String>>(), sourceTableName, destinationTableName)
             }
             verify(exactly = 1) { mockConnection.close() }
         }
@@ -299,7 +305,7 @@ internal class SnowflakeAirbyteClientTest {
         val columnNameMapping = mockk<ColumnNameMapping>(relaxed = true)
         val sourceTableName = TableName(namespace = "namespace", name = "source")
         val destinationTableName = TableName(namespace = "namespace", name = "destination")
-        val stream = mockk<DestinationStream>()
+        val stream = mockk<DestinationStream>(relaxed = true)
         val resultSet = mockk<ResultSet>(relaxed = true)
         val statement =
             mockk<Statement> {
@@ -322,12 +328,7 @@ internal class SnowflakeAirbyteClientTest {
                 targetTableName = destinationTableName,
             )
             verify(exactly = 1) {
-                sqlGenerator.upsertTable(
-                    stream,
-                    columnNameMapping,
-                    sourceTableName,
-                    destinationTableName
-                )
+                sqlGenerator.upsertTable(any(), sourceTableName, destinationTableName)
             }
             verify(exactly = 1) { mockConnection.close() }
         }
@@ -379,7 +380,7 @@ internal class SnowflakeAirbyteClientTest {
             }
 
         every { dataSource.connection } returns mockConnection
-        every { snowflakeColumnUtils.getGenerationIdColumnName() } returns generationIdColumnName
+        every { columnManager.getGenerationIdColumnName() } returns generationIdColumnName
         every { sqlGenerator.getGenerationId(tableName) } returns
             "SELECT $generationIdColumnName FROM ${tableName.toPrettyString(QUOTE)}"
 
@@ -501,8 +502,8 @@ internal class SnowflakeAirbyteClientTest {
         every { dataSource.connection } returns mockConnection
 
         runBlocking {
-            client.copyFromStage(tableName, "test.csv.gz")
-            verify(exactly = 1) { sqlGenerator.copyFromStage(tableName, "test.csv.gz") }
+            client.copyFromStage(tableName, "test.csv.gz", listOf())
+            verify(exactly = 1) { sqlGenerator.copyFromStage(tableName, "test.csv.gz", listOf()) }
             verify(exactly = 1) { mockConnection.close() }
         }
     }
@@ -571,6 +572,10 @@ internal class SnowflakeAirbyteClientTest {
 
         every { dataSource.connection } returns connection
 
+        // Mock the columnManager to return the correct set of meta columns
+        every { columnManager.getMetaColumnNames() } returns
+            setOf(COLUMN_NAME_AB_RAW_ID.toSnowflakeCompatibleName())
+
         val result = client.getColumnsFromDb(tableName)
 
         val expectedColumns =
@@ -583,78 +588,43 @@ internal class SnowflakeAirbyteClientTest {
     }
 
     @Test
-    fun `getColumnsFromStream should return correct column definitions`() {
-        val schema = mockk<AirbyteType>()
-        val stream =
-            DestinationStream(
-                unmappedNamespace = "test_namespace",
-                unmappedName = "test_stream",
-                importType = Overwrite,
-                schema = schema,
-                generationId = 1,
-                minimumGenerationId = 1,
-                syncId = 1,
-                namespaceMapper = NamespaceMapper(NamespaceDefinitionType.DESTINATION)
-            )
-        val columnNameMapping =
-            ColumnNameMapping(
-                mapOf(
-                    "col1" to "COL1_MAPPED",
-                    "col2" to "COL2_MAPPED",
-                )
-            )
+    fun `getColumnsFromDb includes meta columns when the repair is enabled`() {
+        val tableName = TableName("test_namespace", "test_table")
+        val abRawId = COLUMN_NAME_AB_RAW_ID.toSnowflakeCompatibleName()
+        val resultSet = mockk<ResultSet>()
+        every { resultSet.next() } returns true andThen true andThen true andThen false
+        every { resultSet.getString("name") } returns "COL1" andThen abRawId andThen "COL2"
+        // With the repair enabled the meta row is no longer skipped, so its type is read too.
+        every { resultSet.getString("type") } returns
+            "VARCHAR(255)" andThen
+            "TEXT" andThen
+            "NUMBER(38,0)"
+        every { resultSet.getString("null?") } returns "Y" andThen "N" andThen "N"
 
-        val col1FieldType = mockk<FieldType>()
-        every { col1FieldType.type } returns mockk()
-
-        val col2FieldType = mockk<FieldType>()
-        every { col2FieldType.type } returns mockk()
-
-        every { schema.asColumns() } returns
-            linkedMapOf("col1" to col1FieldType, "col2" to col2FieldType)
-        every { snowflakeColumnUtils.toDialectType(col1FieldType.type) } returns "VARCHAR(255)"
-        every { snowflakeColumnUtils.toDialectType(col2FieldType.type) } returns "NUMBER(38,0)"
-        every { snowflakeColumnUtils.columnsAndTypes(any(), any()) } returns
-            listOf(ColumnAndType("COL1_MAPPED", "VARCHAR"), ColumnAndType("COL2_MAPPED", "NUMBER"))
-        every { snowflakeColumnUtils.formatColumnName(any(), false) } answers
-            {
-                firstArg<String>().toSnowflakeCompatibleName()
+        val statement =
+            mockk<Statement> {
+                every { executeQuery(any()) } returns resultSet
+                every { close() } just Runs
             }
 
-        val result = client.getColumnsFromStream(stream, columnNameMapping)
+        val connection = mockk<Connection>()
+        every { connection.createStatement() } returns statement
+        every { connection.close() } just Runs
+
+        every { dataSource.connection } returns connection
+
+        every { columnManager.getMetaColumnNames() } returns setOf(abRawId)
+
+        val result = clientWithRepairEnabled().getColumnsFromDb(tableName)
 
         val expectedColumns =
             mapOf(
-                "COL1_MAPPED" to ColumnType("VARCHAR", true),
-                "COL2_MAPPED" to ColumnType("NUMBER", true),
+                "COL1" to ColumnType("VARCHAR", true),
+                abRawId to ColumnType("TEXT", false),
+                "COL2" to ColumnType("NUMBER", false),
             )
 
         assertEquals(expectedColumns, result)
-    }
-
-    @Test
-    fun `generateSchemaChanges should correctly identify changes`() {
-        val columnsInDb =
-            setOf(
-                ColumnDefinition("COL1", "VARCHAR"),
-                ColumnDefinition("COL2", "NUMBER"),
-                ColumnDefinition("COL3", "BOOLEAN")
-            )
-        val columnsInStream =
-            setOf(
-                ColumnDefinition("COL1", "VARCHAR"), // Unchanged
-                ColumnDefinition("COL3", "TEXT"), // Modified
-                ColumnDefinition("COL4", "DATE") // Added
-            )
-
-        val (added, deleted, modified) = client.generateSchemaChanges(columnsInDb, columnsInStream)
-
-        assertEquals(1, added.size)
-        assertEquals("COL4", added.first().name)
-        assertEquals(1, deleted.size)
-        assertEquals("COL2", deleted.first().name)
-        assertEquals(1, modified.size)
-        assertEquals("COL3", modified.first().name)
     }
 
     @Test
@@ -773,7 +743,7 @@ internal class SnowflakeAirbyteClientTest {
                     "but current role has no privileges on it. " +
                     "If this is unexpected and you cannot resolve this problem, " +
                     "contact your system administrator. " +
-                    "ACCOUNTADMIN role may be required to manage the privileges on the object."
+                    "ACCOUNTADMIN role may be required to manage the privileges on the object.",
             )
         every { connection.close() } just Runs
 
@@ -831,7 +801,7 @@ internal class SnowflakeAirbyteClientTest {
             mockk<Statement> {
                 every { executeQuery(any()) } throws
                     SnowflakeSQLException(
-                        "Schema 'TEST_NAMESPACE' already exists, but current role has no privileges on it"
+                        "Schema 'TEST_NAMESPACE' already exists, but current role has no privileges on it",
                     )
                 every { close() } just Runs
             }
@@ -851,5 +821,370 @@ internal class SnowflakeAirbyteClientTest {
             assertTrue(exception.message!!.contains("current role has no privileges on it"))
             assertTrue(exception.cause is SnowflakeSQLException)
         }
+    }
+
+    /** A DESCRIBE TABLE result set mapping column name -> raw type; every column nullable. */
+    private fun mockDescribeTableResult(columns: Map<String, String>): ResultSet =
+        mockk<ResultSet> {
+            every { next() } returnsMany (List(columns.size) { true } + false)
+            every { getString("name") } returnsMany columns.keys.toList()
+            every { getString("type") } returnsMany columns.values.toList()
+            every { getString("null?") } returns "Y"
+        }
+
+    /** The meta column repair is off by default; these tests opt in. */
+    private fun clientWithRepairEnabled() =
+        SnowflakeAirbyteClient(
+            dataSource,
+            sqlGenerator,
+            snowflakeConfiguration,
+            columnManager,
+            metaColumnRepairEnabled = true,
+        )
+
+    @Test
+    fun `ensureSchemaMatches adds missing meta columns when the repair is enabled`() {
+        val tableName = TableName("test_namespace", "test_table")
+        every { snowflakeConfiguration.legacyRawTablesOnly } returns false
+        val abRawId = COLUMN_NAME_AB_RAW_ID.toSnowflakeCompatibleName()
+        val abExtractedAt = COLUMN_NAME_AB_EXTRACTED_AT.toSnowflakeCompatibleName()
+        val abMeta = COLUMN_NAME_AB_META.toSnowflakeCompatibleName()
+        val abGenerationId = COLUMN_NAME_AB_GENERATION_ID.toSnowflakeCompatibleName()
+
+        // Pre-3.10.0-shaped table: only _AIRBYTE_RAW_ID and _AIRBYTE_EXTRACTED_AT. The single
+        // DESCRIBE TABLE fetch (discoverSchema) serves both the meta column repair and the diff.
+        val describeResultSet =
+            mockDescribeTableResult(
+                mapOf(
+                    abRawId to "VARCHAR(16777216)",
+                    abExtractedAt to "TIMESTAMP_TZ(9)",
+                    "USER_COL" to "TEXT",
+                ),
+            )
+        val statement =
+            mockk<Statement> {
+                // Stage creation, DESCRIBE TABLE, then the ALTERs.
+                every { executeQuery(any()) } returns
+                    mockk<ResultSet>() andThen
+                    describeResultSet andThen
+                    mockk<ResultSet>()
+                every { close() } just Runs
+            }
+        val mockConnection =
+            mockk<Connection> {
+                every { close() } just Runs
+                every { createStatement() } returns statement
+            }
+        every { dataSource.connection } returns mockConnection
+
+        every { columnManager.getMetaColumns() } returns
+            linkedMapOf(
+                abRawId to ColumnType("VARCHAR", false),
+                abExtractedAt to ColumnType("TIMESTAMP_TZ", false),
+                abMeta to ColumnType("VARIANT", false),
+                abGenerationId to ColumnType("NUMBER", true),
+            )
+        every { columnManager.getMetaColumnNames() } returns
+            setOf(abRawId, abExtractedAt, abMeta, abGenerationId)
+
+        val expectedMissing =
+            mapOf(
+                abMeta to ColumnType("VARIANT", false),
+                abGenerationId to ColumnType("NUMBER", true),
+            )
+        val alterSql1 = """ALTER TABLE t ADD COLUMN IF NOT EXISTS "$abMeta" VARIANT;"""
+        val alterSql2 = """ALTER TABLE t ADD COLUMN IF NOT EXISTS "$abGenerationId" NUMBER;"""
+        every { sqlGenerator.addMetaColumns(tableName, expectedMissing) } returns
+            setOf(alterSql1, alterSql2)
+
+        runBlocking {
+            clientWithRepairEnabled()
+                .ensureSchemaMatches(
+                    mockk<DestinationStream>(relaxed = true),
+                    tableName,
+                    ColumnNameMapping(emptyMap()),
+                )
+        }
+
+        verify(exactly = 1) { sqlGenerator.addMetaColumns(tableName, expectedMissing) }
+        verify(exactly = 1) { statement.executeQuery(alterSql1) }
+        verify(exactly = 1) { statement.executeQuery(alterSql2) }
+        // The repair reuses the schema diff's DESCRIBE TABLE fetch; no extra column query.
+        verify(exactly = 1) { sqlGenerator.describeTable(any(), any()) }
+        verify(exactly = 0) { sqlGenerator.showColumns(any()) }
+    }
+
+    @Test
+    fun `ensureSchemaMatches does not repair a table that has all meta columns`() {
+        val tableName = TableName("test_namespace", "test_table")
+        every { snowflakeConfiguration.legacyRawTablesOnly } returns false
+        val abRawId = COLUMN_NAME_AB_RAW_ID.toSnowflakeCompatibleName()
+        val abExtractedAt = COLUMN_NAME_AB_EXTRACTED_AT.toSnowflakeCompatibleName()
+        val abMeta = COLUMN_NAME_AB_META.toSnowflakeCompatibleName()
+        val abGenerationId = COLUMN_NAME_AB_GENERATION_ID.toSnowflakeCompatibleName()
+
+        val describeResultSet =
+            mockDescribeTableResult(
+                mapOf(
+                    abRawId to "VARCHAR(16777216)",
+                    abExtractedAt to "TIMESTAMP_TZ(9)",
+                    abMeta to "VARIANT",
+                    abGenerationId to "NUMBER(38,0)",
+                    "USER_COL" to "TEXT",
+                ),
+            )
+        val statement =
+            mockk<Statement> {
+                // Stage creation, then DESCRIBE TABLE.
+                every { executeQuery(any()) } returns mockk<ResultSet>() andThen describeResultSet
+                every { close() } just Runs
+            }
+        val mockConnection =
+            mockk<Connection> {
+                every { close() } just Runs
+                every { createStatement() } returns statement
+            }
+        every { dataSource.connection } returns mockConnection
+
+        every { columnManager.getMetaColumns() } returns
+            linkedMapOf(
+                abRawId to ColumnType("VARCHAR", false),
+                abExtractedAt to ColumnType("TIMESTAMP_TZ", false),
+                abMeta to ColumnType("VARIANT", false),
+                abGenerationId to ColumnType("NUMBER", true),
+            )
+        every { columnManager.getMetaColumnNames() } returns
+            setOf(abRawId, abExtractedAt, abMeta, abGenerationId)
+
+        runBlocking {
+            clientWithRepairEnabled()
+                .ensureSchemaMatches(
+                    mockk<DestinationStream>(relaxed = true),
+                    tableName,
+                    ColumnNameMapping(emptyMap()),
+                )
+        }
+
+        verify(exactly = 0) { sqlGenerator.addMetaColumns(any(), any()) }
+        verify(exactly = 1) { sqlGenerator.describeTable(any(), any()) }
+        verify(exactly = 0) { sqlGenerator.showColumns(any()) }
+    }
+
+    @Test
+    fun `ensureSchemaMatches compares meta column names case-insensitively`() {
+        val tableName = TableName("test_namespace", "test_table")
+        every { snowflakeConfiguration.legacyRawTablesOnly } returns false
+        val abRawId = COLUMN_NAME_AB_RAW_ID.toSnowflakeCompatibleName()
+        val abExtractedAt = COLUMN_NAME_AB_EXTRACTED_AT.toSnowflakeCompatibleName()
+        val abMeta = COLUMN_NAME_AB_META.toSnowflakeCompatibleName()
+        val abGenerationId = COLUMN_NAME_AB_GENERATION_ID.toSnowflakeCompatibleName()
+
+        // QUOTED_IDENTIFIERS_IGNORE_CASE scenario: stored names differ in case from expected.
+        val describeResultSet =
+            mockDescribeTableResult(
+                mapOf(
+                    abRawId.lowercase() to "VARCHAR(16777216)",
+                    abExtractedAt.lowercase() to "TIMESTAMP_TZ(9)",
+                    abMeta.lowercase() to "VARIANT",
+                    abGenerationId.lowercase() to "NUMBER(38,0)",
+                ),
+            )
+        val statement =
+            mockk<Statement> {
+                // Stage creation, then DESCRIBE TABLE.
+                every { executeQuery(any()) } returns mockk<ResultSet>() andThen describeResultSet
+                every { close() } just Runs
+            }
+        val mockConnection =
+            mockk<Connection> {
+                every { close() } just Runs
+                every { createStatement() } returns statement
+            }
+        every { dataSource.connection } returns mockConnection
+
+        every { columnManager.getMetaColumns() } returns
+            linkedMapOf(
+                abRawId to ColumnType("VARCHAR", false),
+                abExtractedAt to ColumnType("TIMESTAMP_TZ", false),
+                abMeta to ColumnType("VARIANT", false),
+                abGenerationId to ColumnType("NUMBER", true),
+            )
+
+        runBlocking {
+            clientWithRepairEnabled()
+                .ensureSchemaMatches(
+                    mockk<DestinationStream>(relaxed = true),
+                    tableName,
+                    ColumnNameMapping(emptyMap()),
+                )
+        }
+
+        verify(exactly = 0) { sqlGenerator.addMetaColumns(any(), any()) }
+    }
+
+    @Test
+    fun `ensureSchemaMatches repairs meta columns in legacy raw mode`() {
+        val tableName = TableName("test_namespace", "test_table")
+        every { snowflakeConfiguration.legacyRawTablesOnly } returns true
+
+        // Pre-3.10.0-shaped raw table: missing
+        // _airbyte_meta/_airbyte_generation_id/_airbyte_loaded_at.
+        val describeResultSet =
+            mockDescribeTableResult(
+                mapOf(
+                    COLUMN_NAME_AB_RAW_ID to "VARCHAR(16777216)",
+                    COLUMN_NAME_AB_EXTRACTED_AT to "TIMESTAMP_TZ(9)",
+                ),
+            )
+        val statement =
+            mockk<Statement> {
+                // First executeQuery is the stage creation, then DESCRIBE TABLE, then the ALTER.
+                every { executeQuery(any()) } returns
+                    mockk<ResultSet>() andThen
+                    describeResultSet andThen
+                    mockk<ResultSet>()
+                every { close() } just Runs
+            }
+        val mockConnection =
+            mockk<Connection> {
+                every { close() } just Runs
+                every { createStatement() } returns statement
+            }
+        every { dataSource.connection } returns mockConnection
+
+        every { columnManager.getMetaColumns() } returns
+            linkedMapOf(
+                COLUMN_NAME_AB_RAW_ID to ColumnType("VARCHAR", false),
+                COLUMN_NAME_AB_EXTRACTED_AT to ColumnType("TIMESTAMP_TZ", false),
+                COLUMN_NAME_AB_META to ColumnType("VARIANT", false),
+                COLUMN_NAME_AB_GENERATION_ID to ColumnType("NUMBER", true),
+                COLUMN_NAME_AB_LOADED_AT to ColumnType("TIMESTAMP_TZ", true),
+            )
+
+        val expectedMissing =
+            mapOf(
+                COLUMN_NAME_AB_META to ColumnType("VARIANT", false),
+                COLUMN_NAME_AB_GENERATION_ID to ColumnType("NUMBER", true),
+                COLUMN_NAME_AB_LOADED_AT to ColumnType("TIMESTAMP_TZ", true),
+            )
+        val alterSql = "ALTER RAW TABLE"
+        every { sqlGenerator.addMetaColumns(tableName, expectedMissing) } returns setOf(alterSql)
+
+        runBlocking {
+            clientWithRepairEnabled()
+                .ensureSchemaMatches(
+                    mockk<DestinationStream>(),
+                    tableName,
+                    ColumnNameMapping(emptyMap()),
+                )
+        }
+
+        verify(exactly = 1) { sqlGenerator.createSnowflakeStage(tableName) }
+        verify(exactly = 1) { sqlGenerator.addMetaColumns(tableName, expectedMissing) }
+        verify(exactly = 1) { statement.executeQuery(alterSql) }
+        // Only the repair's column fetch runs in raw mode; the schema diff must not.
+        verify(exactly = 1) { sqlGenerator.describeTable(any(), any()) }
+        verify(exactly = 0) { sqlGenerator.alterTable(any(), any(), any()) }
+    }
+
+    @Test
+    fun `ensureSchemaMatches skips the meta column repair by default`() {
+        val tableName = TableName("test_namespace", "test_table")
+        every { snowflakeConfiguration.legacyRawTablesOnly } returns false
+
+        // Pre-3.10.0-shaped table, but the repair is not enabled.
+        val describeResultSet =
+            mockDescribeTableResult(
+                mapOf(
+                    COLUMN_NAME_AB_RAW_ID.toSnowflakeCompatibleName() to "VARCHAR(16777216)",
+                    COLUMN_NAME_AB_EXTRACTED_AT.toSnowflakeCompatibleName() to "TIMESTAMP_TZ(9)",
+                ),
+            )
+        val statement =
+            mockk<Statement> {
+                // Stage creation, then DESCRIBE TABLE (diff discovery only).
+                every { executeQuery(any()) } returns mockk<ResultSet>() andThen describeResultSet
+                every { close() } just Runs
+            }
+        val mockConnection =
+            mockk<Connection> {
+                every { close() } just Runs
+                every { createStatement() } returns statement
+            }
+        every { dataSource.connection } returns mockConnection
+
+        runBlocking {
+            // The setup's client is constructed without opting into the repair.
+            client.ensureSchemaMatches(
+                mockk<DestinationStream>(relaxed = true),
+                tableName,
+                ColumnNameMapping(emptyMap()),
+            )
+        }
+
+        verify(exactly = 0) { sqlGenerator.addMetaColumns(any(), any()) }
+        verify(exactly = 0) { columnManager.getMetaColumns() }
+        // The regular schema diff discovery still runs.
+        verify(exactly = 1) { sqlGenerator.describeTable(any(), any()) }
+    }
+
+    @Test
+    fun `ensureSchemaMatches in raw mode only creates the stage by default`() {
+        val tableName = TableName("test_namespace", "test_table")
+        every { snowflakeConfiguration.legacyRawTablesOnly } returns true
+
+        val statement =
+            mockk<Statement> {
+                every { executeQuery(any()) } returns mockk<ResultSet>()
+                every { close() } just Runs
+            }
+        val mockConnection =
+            mockk<Connection> {
+                every { close() } just Runs
+                every { createStatement() } returns statement
+            }
+        every { dataSource.connection } returns mockConnection
+
+        runBlocking {
+            client.ensureSchemaMatches(
+                mockk<DestinationStream>(),
+                tableName,
+                ColumnNameMapping(emptyMap()),
+            )
+        }
+
+        verify(exactly = 1) { sqlGenerator.createSnowflakeStage(tableName) }
+        verify(exactly = 0) { sqlGenerator.addMetaColumns(any(), any()) }
+        verify(exactly = 0) { sqlGenerator.describeTable(any(), any()) }
+        verify(exactly = 1) { statement.executeQuery(any()) }
+    }
+
+    @Test
+    fun testToCanonicalDataTypeStripsArgumentsFromNonNumericTypes() {
+        assertEquals("VARCHAR", toCanonicalDataType("VARCHAR(16777216)"))
+        assertEquals("TIMESTAMP_TZ", toCanonicalDataType("TIMESTAMP_TZ(9)"))
+        assertEquals("FLOAT", toCanonicalDataType("FLOAT"))
+    }
+
+    @Test
+    fun testToCanonicalDataTypeMapsScaleZeroNumberToIntegerType() {
+        // Integer columns are created as NUMBER and reported by DESCRIBE TABLE as NUMBER(38,0).
+        assertEquals(SnowflakeDataType.NUMBER.typeName, toCanonicalDataType("NUMBER(38,0)"))
+    }
+
+    @Test
+    fun testToCanonicalDataTypeThrowsWhenScaleIsAbsent() {
+        // Bare NUMBER or NUMBER(precision) without explicit scale should throw
+        assertThrows<IllegalArgumentException> { toCanonicalDataType("NUMBER") }
+        assertThrows<IllegalArgumentException> { toCanonicalDataType("NUMBER(38)") }
+    }
+
+    @Test
+    fun testToCanonicalDataTypeMapsPositiveScaleNumberToDecimalType() {
+        // NUMBER, NUMERIC and DECIMAL are all synonyms.
+        assertEquals(SnowflakeDataType.NUMERIC_38_9.typeName, toCanonicalDataType("NUMBER(38,9)"))
+        assertEquals(SnowflakeDataType.NUMERIC_38_9.typeName, toCanonicalDataType("NUMERIC(38,9)"))
+        assertEquals(SnowflakeDataType.NUMERIC_38_9.typeName, toCanonicalDataType("DECIMAL(38,9)"))
+        assertEquals(SnowflakeDataType.NUMERIC_38_9.typeName, toCanonicalDataType("NUMBER(38, 9)"))
     }
 }

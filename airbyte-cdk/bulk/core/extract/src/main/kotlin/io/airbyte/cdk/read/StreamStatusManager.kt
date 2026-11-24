@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.read
@@ -65,7 +65,7 @@ class StreamStatusManager(
                 emit(
                     AirbyteStreamStatusTraceMessage()
                         .withStreamDescriptor(stream.id.asProtocolStreamDescriptor())
-                        .withStatus(statusToEmit)
+                        .withStatus(statusToEmit),
                 )
             }
         }
@@ -76,7 +76,7 @@ class StreamStatusManager(
         val feeds: Set<Feed>,
         val state: AtomicReference<State> = AtomicReference(State.PENDING),
         val stoppedFeeds: ConcurrentHashSet<Feed> = ConcurrentHashSet(),
-        val numStoppedFeeds: AtomicInteger = AtomicInteger()
+        val numStoppedFeeds: AtomicInteger = AtomicInteger(),
     ) {
         fun onStarting(): List<AirbyteStreamStatus> =
             if (state.compareAndSet(State.PENDING, State.SUCCESS)) {
@@ -87,7 +87,7 @@ class StreamStatusManager(
 
         fun onComplete(feed: Feed): List<AirbyteStreamStatus> =
             onStarting() + // ensure the state is not PENDING
-            run {
+                run {
                     if (!finalStop(feed)) {
                         return@run emptyList()
                     }
@@ -104,7 +104,7 @@ class StreamStatusManager(
 
         fun onFailure(feed: Feed): List<AirbyteStreamStatus> =
             onStarting() + // ensure the state is not PENDING
-            run {
+                run {
                     state.compareAndSet(State.SUCCESS, State.FAILURE)
                     if (!finalStop(feed)) {
                         return@run emptyList()

@@ -1,4 +1,4 @@
-/* Copyright (c) 2024 Airbyte, Inc., all rights reserved. */
+/* Copyright (c) 2026 Airbyte, Inc., all rights reserved. */
 package io.airbyte.cdk.h2source
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter
@@ -77,7 +77,7 @@ class H2SourceConfigurationSpecification : ConfigurationSpecification() {
     @JsonSchemaTitle("Table Filters")
     @JsonPropertyDescription(
         "Optional filters to include only specific tables from specific schemas. " +
-            "Works in combination with the 'Schemas' config above."
+            "Works in combination with the 'Schemas' config above.",
     )
     @JsonSchemaInject(json = """{"order":2,"always_show":true,"group":"optional"}""")
     var tableFilters: List<TableFilter>? = emptyList()

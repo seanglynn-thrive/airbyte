@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.test.fixtures.legacy
@@ -9,6 +9,7 @@ import com.google.common.annotations.VisibleForTesting
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 private val LOGGER = KotlinLogging.logger {}
+
 /** Singleton of destination config for easy lookup of values. */
 class DestinationConfig private constructor() {
     // whether the destination fully supports Destinations V2

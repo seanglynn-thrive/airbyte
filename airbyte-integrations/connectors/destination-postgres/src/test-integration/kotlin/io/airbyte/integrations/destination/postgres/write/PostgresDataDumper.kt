@@ -1,24 +1,29 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.postgres.write
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.airbyte.cdk.command.ConfigurationSpecification
 import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.data.AirbyteValue
 import io.airbyte.cdk.load.data.NullValue
 import io.airbyte.cdk.load.data.ObjectValue
 import io.airbyte.cdk.load.message.Meta
+import io.airbyte.cdk.load.table.DefaultTempTableNameGenerator
 import io.airbyte.cdk.load.test.util.DestinationDataDumper
 import io.airbyte.cdk.load.test.util.OutputRecord
 import io.airbyte.integrations.destination.postgres.config.PostgresBeanFactory
-import io.airbyte.integrations.destination.postgres.db.PostgresFinalTableNameGenerator
+import io.airbyte.integrations.destination.postgres.schema.PostgresTableSchemaMapper
 import io.airbyte.integrations.destination.postgres.spec.PostgresConfiguration
 import org.postgresql.util.PGobject
 
+// ObjectMapper without USE_BIG_DECIMAL_FOR_FLOATS to avoid precision issues in test comparisons
+private val testObjectMapper: ObjectMapper = ObjectMapper()
+
 class PostgresDataDumper(
-    private val configProvider: (ConfigurationSpecification) -> PostgresConfiguration
+    private val configProvider: (ConfigurationSpecification) -> PostgresConfiguration,
 ) : DestinationDataDumper {
     private fun sanitizeColumnName(name: String): String {
         // Replicate the sanitization logic used by TableCatalog
@@ -40,22 +45,25 @@ class PostgresDataDumper(
 
     override fun dumpRecords(
         spec: ConfigurationSpecification,
-        stream: DestinationStream
+        stream: DestinationStream,
     ): List<OutputRecord> {
         val config = configProvider(spec)
-        val tableNameGenerator = PostgresFinalTableNameGenerator(config)
+        val schemaMapper =
+            PostgresTableSchemaMapper(
+                config,
+                DefaultTempTableNameGenerator(),
+            )
         val dataSource =
             PostgresBeanFactory()
                 .postgresDataSource(
                     postgresConfiguration = config,
                     resolvedHost = config.host,
-                    resolvedPort = config.port
+                    resolvedPort = config.port,
                 )
 
         // Build reverse mapping from sanitized column names back to original names
         val reverseMapping = mutableMapOf<String, String>()
-        (stream.schema as? io.airbyte.cdk.load.data.ObjectType)?.properties?.keys?.forEach {
-            originalName ->
+        stream.tableSchema.columnSchema.inputSchema.keys.forEach { originalName ->
             val sanitizedName = sanitizeColumnName(originalName)
             reverseMapping[sanitizedName] = originalName
         }
@@ -66,8 +74,8 @@ class PostgresDataDumper(
             ds.connection.use { connection ->
                 val statement = connection.createStatement()
 
-                // Use the FinalTableNameGenerator to get the correct table name
-                val tableName = tableNameGenerator.getTableName(stream.mappedDescriptor)
+                // Use the TableSchemaMapper to get the correct table name
+                val tableName = schemaMapper.toFinalTableName(stream.mappedDescriptor)
                 val quotedTableName = "\"${tableName.namespace}\".\"${tableName.name}\""
 
                 // First check if the table exists
@@ -77,7 +85,8 @@ class PostgresDataDumper(
                     FROM information_schema.tables
                     WHERE table_schema = '${tableName.namespace}'
                     AND table_name = '${tableName.name}'
-                """.trimIndent()
+                """
+                        .trimIndent()
 
                 val existsResultSet = statement.executeQuery(tableExistsQuery)
                 existsResultSet.next()
@@ -130,7 +139,7 @@ class PostgresDataDumper(
                             generationId = resultSet.getLong(Meta.COLUMN_NAME_AB_GENERATION_ID),
                             data = ObjectValue(dataMap),
                             airbyteMeta =
-                                stringToMeta(resultSet.getString(Meta.COLUMN_NAME_AB_META))
+                                stringToMeta(resultSet.getString(Meta.COLUMN_NAME_AB_META)),
                         )
                     output.add(outputRecord)
                 }
@@ -143,7 +152,7 @@ class PostgresDataDumper(
 
     override fun dumpFile(
         spec: ConfigurationSpecification,
-        stream: DestinationStream
+        stream: DestinationStream,
     ): Map<String, String> {
         throw UnsupportedOperationException("Postgres does not support file transfer.")
     }
@@ -163,16 +172,15 @@ class PostgresDataDumper(
             is java.sql.Timestamp -> value.toLocalDateTime()
             // JSONB and JSON types
             is PGobject -> {
-                val jsonNode = io.airbyte.commons.json.Jsons.deserialize(value.value!!)
+                val jsonNode = testObjectMapper.readTree(value.value!!)
                 // JSONB can contain objects, arrays, or primitives (strings, numbers, booleans,
                 // null)
                 // Try to convert to Map if it's an object, otherwise return the primitive value
                 when {
                     jsonNode.isObject ->
-                        io.airbyte.commons.json.Jsons.convertValue(jsonNode, Map::class.java) as Any
+                        testObjectMapper.convertValue(jsonNode, Map::class.java) as Any
                     jsonNode.isArray ->
-                        io.airbyte.commons.json.Jsons.convertValue(jsonNode, List::class.java)
-                            as Any
+                        testObjectMapper.convertValue(jsonNode, List::class.java) as Any
                     jsonNode.isTextual -> jsonNode.asText() ?: ""
                     jsonNode.isNumber ->
                         when {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.state
@@ -79,8 +79,9 @@ class InferredStateKeyClient(
                     "Catalog contains no streams; cannot emit global state."
                 }
 
-                val ordinals =
-                    streams.map { it.unmappedDescriptor to currentOrdinal(it.unmappedDescriptor) }
+                val ordinals = streams.map {
+                    it.unmappedDescriptor to currentOrdinal(it.unmappedDescriptor)
+                }
                 val universal = ordinals.first().second
                 check(ordinals.all { it.second == universal }) {
                     "For global state, all streams must share the same ordinal. Found=${ordinals.map { it.second }.toSet()}."

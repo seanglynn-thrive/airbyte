@@ -5,7 +5,7 @@ import TabItem from "@theme/TabItem";
 
 Everyone is welcome to contribute to Airbyte's documentation.
 
-Airbyte's documentation is in the [Airbyte repository](https://github.com/airbytehq/airbyte/tree/master/docs) on GitHub. It's published at [docs.airbyte.com](https://docs.airbyte.com/) using [Vercel](https://vercel.com). Connector docs are also rendered within Airbyte itself when setting up new connectors. The docs are built on [Docusaurus](https://docusaurus.io/). Content is written in [Markdown](https://guides.github.com/features/mastering-markdown/) and all topics are in the `/docs` folder. Configuration files and previously-released versions of platform docs are in the `/docusaurus` folder.
+Airbyte's documentation is in the [Airbyte repository](https://github.com/airbytehq/airbyte/tree/master/docs) on GitHub. It's published at [docs.airbyte.com](https://docs.airbyte.com/) using [Vercel](https://vercel.com). Connector docs are also rendered within Airbyte itself when setting up new connectors. The docs are built on [Docusaurus](https://docusaurus.io/). Content is written in [Markdown](https://guides.github.com/features/mastering-markdown/) and all topics are in the `/docs` folder. Configuration files are in the `/docusaurus` folder.
 
 ## Open source contributions welcome
 
@@ -163,24 +163,22 @@ You can only use these templates for platform docs. Docs for connectors have the
 
 If you're writing docs for a data source or destination, there are special rules you must follow. See the [Connector Documentation Guide](/platform/connector-development/writing-connector-docs). Platform documentation is less formulaic.
 
-## Multiple instances and versions
+### Agent connector labels {#agent-connector-labels}
 
-The docs site uses [multiple instances](https://docusaurus.io/docs/docs-multi-instance). Some of these instances [use versioning](https://docusaurus.io/docs/versioning) and some do not. This pattern allows us to maintain multiple smaller doc sets that each have their own properties and configurations, and which are aggregated into a single site at build time. The rationale behind this is that some content benefits from allowing users to view different versions of the docs while other content does not.
+Some data replication connectors also have an agent connector equivalent. Connector pages and the connector lists on `/integrations` mark these connectors. The list of agent-capable connectors lives in [`docusaurus/src/data/agent_connectors.json`](https://github.com/airbytehq/airbyte/blob/master/docusaurus/src/data/agent_connectors.json). Add or remove a connector's slug there, without the `source-` or `destination-` prefix, to change its label.
 
-Currently, the site has four instances, but Airbyte could add more instances later.
+## Multiple instances
 
-- Home - not versioned, this is the home page
-- Platform - versioned
-- Connectors - not versioned
-- Release notes - not versioned
+The docs site uses [multiple instances](https://docusaurus.io/docs/docs-multi-instance). This pattern allows us to maintain multiple smaller doc sets that each have their own properties and configurations, and which are aggregated into a single site at build time.
 
-For most contributors, this reality isn't particularly relevant to producing docs. However, there is one important concept to keep in mind.
+Currently, the site has these instances:
 
-When you update content for a versioned set of docs, your changes go into what Docusaurus calls the Next version: the version of Airbyte that isn't released yet, and which users can access by selecting "Next" using the version picker in the navigation. Docs for previously released versions of Airbyte aren't updated. If you are unable to see your changes reflected on the site, you're probably looking at docs for a version that was already released. Switch to the Next version to see your changes.
-
-You can still update documentation for released versions, but you need to make these changes to the released files. Docusaurus stores these in `/docusaurus/<instance>_versioned_docs`.
-
-For help creating and managing versions, see [Release and manage documentation versions](#doc-versions).
+- Home - the home page
+- Platform
+- Connectors
+- Release notes
+- Developers
+- Community
 
 ## Common patterns and components
 
@@ -218,15 +216,15 @@ Certain Airbyte products reserve some platform features. To avoid confusion and 
 
 To enable badges, include `products` in the Markdown metadata. The following values are possible, and you can combine them as needed.
 
-**Badge display:** all 6 badges always appear in order - Core, Standard, Plus, Pro, Enterprise Flex, Self-Managed Enterprise. Available badges appear highlighted, unavailable badges appear grayed out.
+**Badge display:** all 5 badges always appear in order - Core, Standard, Plus, Pro, Enterprise Flex. Available badges appear highlighted, unavailable badges appear grayed out.
 
 **Metadata keys:**
 
-- `all`: Core, Self-Managed Enterprise, Standard, and Plus - doesn't include Pro, Enterprise Flex, or Embedded
+- `all`: everything except Embedded - Core, Standard, Plus, Pro, and Enterprise Flex
 - `oss-community`: Core only
-- `oss-enterprise`: Self-Managed Enterprise only
 - `cloud`: Standard and Plus (also enables Pro and Enterprise Flex due to Cloud tier inheritance)
 - `cloud-plus`: Plus only (also enables Pro and Enterprise Flex due to Cloud tier inheritance)
+- `cloud-no-flex`: Standard, Plus, and Pro, without Enterprise Flex
 - `cloud-teams`: Pro only (also enables Enterprise Flex due to Cloud tier inheritance)
 - `enterprise-flex`: Enterprise Flex only
 - `embedded`: Embedded only (hidden if not specified - there is no off state for the Embedded badge)
@@ -237,8 +235,6 @@ To enable badges, include `products` in the Markdown metadata. The following val
 - If you specify `cloud-plus`: Plus, Pro, and Enterprise Flex badges become enabled - Standard turns off
 - If you specify `cloud-teams`: Pro and Enterprise Flex badges become enabled - Standard and Plus turn off
 - If you specify `enterprise-flex`: Only Enterprise Flex badge becomes enabled
-
-**Self-managed plans** Core and Self-Managed Enterprise don't inherit from each other.
 
 In this example, the Core badge appears highlighted, and all other badges appear grayed out.
 
@@ -252,14 +248,14 @@ products: oss-community
 Some text.
 ```
 
-In this example, Pro, and Enterprise Flex badges appear highlighted due to Cloud tier inheritance, while Core, Standard, Plus, and Self-Managed Enterprise badges appear grayed out.
+In this example, Pro, and Enterprise Flex badges appear highlighted due to Cloud tier inheritance, while Core, Standard, and Plus badges appear grayed out.
 
 ```markdown
 ---
-products: cloud-teams, enterprise-flex, oss-enterprise
+products: cloud-teams, enterprise-flex
 ---
 
-# This topic is for Pro, Enterprise Flex, and Self-Managed Enterprise
+# This topic is for Pro and Enterprise Flex
 
 Some text.
 ```
@@ -510,65 +506,3 @@ Before Airbyte accepts your contribution, you need to sign the Contributor Licen
 ## Deploy the documentation site
 
 When someone merges documentation changes into the `master` branch, Vercel deploys updated docs automatically. This takes 5-10 minutes and needs no human intervention.
-
-## Release and manage documentation versions {#doc-versions}
-
-:::info Airbyte employees only
-This information is only relevant to Airbyte employees who release new versions of Airbyte.
-:::
-
-When you release a new version of Airbyte, make a new docs version of the docs to match it.
-
-### Create a new major version
-
-When you release a new major version of Airbyte like 2.0 or 2.1, generate a documentation version for it. This process generates a "frozen" set of the docs based on their state at that point in time. Once the version exists, you _can_ still update those docs, but changes you make don't carry forward to future versions.
-
-1. In GitHub, create a new branch off `master`.
-
-2. Open a terminal, change to the docusaurus folder, and run the command to generate a version. `<version>` can be a number like `2.0` or anything else you like. Be consistent with Airbyte and other versions on the docs site. Whatever string you enter here later appears in the docs UI.
-
-   ```bash
-   cd docusaurus
-   pnpm run docusaurus docs:version:platform <version>
-   ```
-
-   Docusaurus automatically does three things at this point. It:
-   - Defines the existence of that version in the `/docusaurus/platform_versions.json` file
-   - Creates a physical copy of the versioned platform docs in `/docusaurus/platform_versioned_docs`
-   - Creates a physical copy of the versioned platform sidebar in `/docusaurus/platform_versioned_sidebars`
-
-3. Test your build locally to make sure everything looks as expected. Verify:
-   - The docs site builds locally
-   - Your local Docusaurus build doesn't report new broken links
-   - The version selector in the navigation contains your new version
-
-4. Create a pull request, get an approval, wait for CI checks to pass, and merge your changes into `master`.
-
-### Create a new minor version
-
-Typically, you don't generate a docs version for patch releases like 2.1.1. The only exception is if there is an actual substantive change in that patch and it needs separate documentation. If you actually need to do this, the process is the same as a major version, described in the preceding section.
-
-### Delete a version
-
-Delete old documentation versions when they're no longer useful, like when all users have upgraded past that version. Deleting old versions speeds up docs builds and removes irrelevant information from the internet so it doesn't confuse people.
-
-1. Remove the version from the array in the `/docusaurus/<instance>_versions.json` file.
-2. Delete the versioned docs directory from `/docusaurus/<instance>_versioned_docs`.
-3. Delete the versioned sidebar file from `/docusaurus/<instance>_versioned_sidebars`.
-
-### Update an existing version
-
-In almost all cases, you work on docs for the Next version. Sometimes, though, you need to update something you've already released.
-
-Though released documentation versions are "frozen," they're made of normal files, and you can still edit them like you would anything else. When you do, those changes only apply to the version you are editing. You can't automatically carry them forward to future versions. For this reason, it's best not to make major changes to released docs versions. Focus on making the next version better and only updated released versions when it's unavoidable.
-
-Find content files in `/docusaurus/<instance>_versioned_docs` and sidebars in `/docusaurus/<instance>_versioned_sidebars`.
-
-### Regenerate an existing version
-
-From time to time, you may need to regenerate an existing version of the docs from the next version. For example, you follow a major version release with a critical patch, and that patch requires updating all docs for that version. Rather than trying to update both the next and current docs versions, you could potentially just regenerate the versioned docs using the current state of the docs.
-
-1. Follow the preceding steps to delete that version.
-2. Follow the preceding steps to create that version.
-
-When you do this, you run the risk of an unintended change leaking into this version of the docs. For example, a documented feature from a future, unreleased version of Airbyte. Pay attention to the diff in GitHub and, if necessary, expunge anything from the versioned docs files that shouldn't be there.

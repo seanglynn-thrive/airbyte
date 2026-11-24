@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.postgres.write
@@ -37,7 +37,7 @@ object PostgresExpectedRawRecordMapper : ExpectedRecordMapper {
                 ObjectValue(
                     value.values
                         .filter { (_, v) -> v !is NullValue }
-                        .mapValuesTo(linkedMapOf()) { (_, v) -> filterNullValues(v) }
+                        .mapValuesTo(linkedMapOf()) { (_, v) -> filterNullValues(v) },
                 )
             else -> value
         }
@@ -48,7 +48,7 @@ object PostgresExpectedRawRecordMapper : ExpectedRecordMapper {
             is ArrayValue -> ArrayValue(value.values.map { removeNullCharacters(it) })
             is ObjectValue ->
                 ObjectValue(
-                    value.values.mapValuesTo(linkedMapOf()) { (_, v) -> removeNullCharacters(v) }
+                    value.values.mapValuesTo(linkedMapOf()) { (_, v) -> removeNullCharacters(v) },
                 )
             else -> value
         }

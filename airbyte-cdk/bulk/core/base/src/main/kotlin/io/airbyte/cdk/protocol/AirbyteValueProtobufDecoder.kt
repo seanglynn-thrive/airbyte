@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.protocol
@@ -52,7 +52,7 @@ class AirbyteValueProtobufDecoder {
                 val instant =
                     Instant.ofEpochSecond(
                         offsetDateTimeMsg.epochSecond,
-                        offsetDateTimeMsg.nano.toLong()
+                        offsetDateTimeMsg.nano.toLong(),
                     )
                 val offset = ZoneOffset.ofTotalSeconds(offsetDateTimeMsg.offsetSeconds)
                 OffsetDateTime.ofInstant(instant, offset)

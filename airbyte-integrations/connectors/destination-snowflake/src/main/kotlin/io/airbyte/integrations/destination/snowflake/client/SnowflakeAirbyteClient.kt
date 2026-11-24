@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.snowflake.client
@@ -13,19 +13,20 @@ import io.airbyte.cdk.load.component.TableColumns
 import io.airbyte.cdk.load.component.TableOperationsClient
 import io.airbyte.cdk.load.component.TableSchema
 import io.airbyte.cdk.load.component.TableSchemaEvolutionClient
+import io.airbyte.cdk.load.schema.model.TableName
 import io.airbyte.cdk.load.table.ColumnNameMapping
-import io.airbyte.cdk.load.table.TableName
 import io.airbyte.cdk.load.util.deserializeToNode
-import io.airbyte.integrations.destination.snowflake.db.ColumnDefinition
-import io.airbyte.integrations.destination.snowflake.db.escapeJsonIdentifier
-import io.airbyte.integrations.destination.snowflake.db.toSnowflakeCompatibleName
+import io.airbyte.integrations.destination.snowflake.schema.SnowflakeColumnManager
+import io.airbyte.integrations.destination.snowflake.schema.toSnowflakeCompatibleName
 import io.airbyte.integrations.destination.snowflake.spec.SnowflakeConfiguration
 import io.airbyte.integrations.destination.snowflake.sql.COUNT_TOTAL_ALIAS
-import io.airbyte.integrations.destination.snowflake.sql.NOT_NULL
-import io.airbyte.integrations.destination.snowflake.sql.SnowflakeColumnUtils
+import io.airbyte.integrations.destination.snowflake.sql.SnowflakeDataType.NUMBER
+import io.airbyte.integrations.destination.snowflake.sql.SnowflakeDataType.NUMERIC_38_9
 import io.airbyte.integrations.destination.snowflake.sql.SnowflakeDirectLoadSqlGenerator
 import io.airbyte.integrations.destination.snowflake.sql.andLog
+import io.airbyte.integrations.destination.snowflake.sql.escapeJsonIdentifier
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.micronaut.context.annotation.Value
 import jakarta.inject.Singleton
 import java.sql.ResultSet
 import javax.sql.DataSource
@@ -41,51 +42,62 @@ private val log = KotlinLogging.logger {}
 class SnowflakeAirbyteClient(
     private val dataSource: DataSource,
     private val sqlGenerator: SnowflakeDirectLoadSqlGenerator,
-    private val snowflakeColumnUtils: SnowflakeColumnUtils,
     private val snowflakeConfiguration: SnowflakeConfiguration,
+    private val columnManager: SnowflakeColumnManager,
+    /**
+     * Feature flag for the pre-3.10.0 meta column repair in [ensureSchemaMatches]. Off by default:
+     * only customers migrating from a pre-direct-load connector version need the repair, and it is
+     * enabled for them by setting the env var
+     * `AIRBYTE_DESTINATION_SNOWFLAKE_META_COLUMN_REPAIR=true`.
+     */
+    @Value("\${airbyte.destination.snowflake.meta-column-repair:false}")
+    private val metaColumnRepairEnabled: Boolean,
 ) : TableOperationsClient, TableSchemaEvolutionClient {
+    private val databaseName = snowflakeConfiguration.database.toSnowflakeCompatibleName()
 
-    private val airbyteColumnNames =
-        snowflakeColumnUtils.getFormattedDefaultColumnNames(false).toSet()
+    override suspend fun countTable(tableName: TableName): Long? {
+        if (!tableExists(tableName)) {
+            return null
+        }
+        return dataSource.connection.use { connection ->
+            val statement = connection.createStatement()
+            statement.use {
+                val resultSet = it.executeQuery(sqlGenerator.countTable(tableName))
 
-    override suspend fun countTable(tableName: TableName): Long? =
-        try {
-            dataSource.connection.use { connection ->
-                val statement = connection.createStatement()
-                statement.use {
-                    val resultSet = it.executeQuery(sqlGenerator.countTable(tableName))
-
-                    if (resultSet.next()) {
-                        resultSet.getLong(COUNT_TOTAL_ALIAS)
-                    } else {
-                        0L
-                    }
+                if (resultSet.next()) {
+                    resultSet.getLong(COUNT_TOTAL_ALIAS)
+                } else {
+                    0L
                 }
             }
-        } catch (e: SnowflakeSQLException) {
-            log.debug(e) {
-                "Table ${tableName.toPrettyString()} does not exist.  Returning a null count to signal a missing table."
-            }
-            null
         }
+    }
 
-    /**
-     * TEST ONLY. We have a much more performant implementation in
-     * [io.airbyte.integrations.destination.snowflake.db.SnowflakeDirectLoadDatabaseInitialStatusGatherer]
-     * .
-     */
-    override suspend fun tableExists(table: TableName) = countTable(table) != null
+    override suspend fun tableExists(table: TableName): Boolean =
+        dataSource.connection.use { connection ->
+            val statement =
+                connection.prepareStatement(
+                    """
+                    show tables
+                    like ?
+                    in schema "$databaseName"."${table.namespace}"
+                    """
+                        .trimIndent(),
+                )
+            statement.setString(1, table.name)
+            statement.use { it.executeQuery().next() }
+        }
 
     override suspend fun namespaceExists(namespace: String): Boolean {
         return dataSource.connection.use { connection ->
-            val databaseName = snowflakeConfiguration.database.toSnowflakeCompatibleName()
             val statement =
                 connection.prepareStatement(
                     """
                         SELECT COUNT(*) > 0 AS SCHEMA_EXISTS
                         FROM "$databaseName".INFORMATION_SCHEMA.SCHEMATA
                         WHERE SCHEMA_NAME = ?
-                    """.andLog()
+                    """
+                        .andLog(),
                 )
 
             // When querying information_schema, snowflake needs the "true" schema name,
@@ -124,9 +136,9 @@ class SnowflakeAirbyteClient(
         stream: DestinationStream,
         tableName: TableName,
         columnNameMapping: ColumnNameMapping,
-        replace: Boolean
+        replace: Boolean,
     ) {
-        execute(sqlGenerator.createTable(stream, tableName, columnNameMapping, replace))
+        execute(sqlGenerator.createTable(tableName, stream.tableSchema, replace))
         execute(sqlGenerator.createSnowflakeStage(tableName))
     }
 
@@ -139,9 +151,9 @@ class SnowflakeAirbyteClient(
         }
 
         if (targetExists) {
-            // If target exists, use SWAP for efficiency
-            log.info { "Using SWAP operation since target table exists" }
-            execute(sqlGenerator.swapTableWith(sourceTableName, targetTableName))
+            // If target exists, use CLONE for efficiency
+            log.info { "Using CLONE operation since target table exists" }
+            execute(sqlGenerator.cloneTableWith(sourceTableName, targetTableName))
             execute(sqlGenerator.dropTable(sourceTableName))
         } else {
             // If target doesn't exist, rename source to target
@@ -161,20 +173,26 @@ class SnowflakeAirbyteClient(
     override suspend fun copyTable(
         columnNameMapping: ColumnNameMapping,
         sourceTableName: TableName,
-        targetTableName: TableName
+        targetTableName: TableName,
     ) {
-        execute(sqlGenerator.copyTable(columnNameMapping, sourceTableName, targetTableName))
+        // Get all column names from the mapping (both meta columns and user columns)
+        val columnNames = buildSet {
+            // Add Airbyte meta columns (using uppercase constants)
+            addAll(columnManager.getMetaColumnNames())
+            // Add user columns from mapping
+            addAll(columnNameMapping.values)
+        }
+
+        execute(sqlGenerator.copyTable(columnNames, sourceTableName, targetTableName))
     }
 
     override suspend fun upsertTable(
         stream: DestinationStream,
         columnNameMapping: ColumnNameMapping,
         sourceTableName: TableName,
-        targetTableName: TableName
+        targetTableName: TableName,
     ) {
-        execute(
-            sqlGenerator.upsertTable(stream, columnNameMapping, sourceTableName, targetTableName)
-        )
+        execute(sqlGenerator.upsertTable(stream.tableSchema, sourceTableName, targetTableName))
     }
 
     override suspend fun dropTable(tableName: TableName) {
@@ -184,7 +202,7 @@ class SnowflakeAirbyteClient(
     override suspend fun ensureSchemaMatches(
         stream: DestinationStream,
         tableName: TableName,
-        columnNameMapping: ColumnNameMapping
+        columnNameMapping: ColumnNameMapping,
     ) {
         execute(sqlGenerator.createSnowflakeStage(tableName))
         /*
@@ -193,20 +211,56 @@ class SnowflakeAirbyteClient(
          * ensure that the destination schema is in sync with any changes.
          */
         if (snowflakeConfiguration.legacyRawTablesOnly) {
+            if (metaColumnRepairEnabled) {
+                repairMissingMetaColumns(tableName, getColumnsFromDb(tableName).keys)
+            }
             return
         }
         super.ensureSchemaMatches(stream, tableName, columnNameMapping)
     }
 
     override suspend fun discoverSchema(tableName: TableName): TableSchema {
+        if (metaColumnRepairEnabled) {
+            // With the repair enabled, getColumnsFromDb also returns the airbyte meta columns:
+            // add any that are missing, then keep them out of the diff (computeSchema excludes
+            // them, and the CDK requires discoverSchema to match).
+            val allColumns = getColumnsFromDb(tableName)
+            repairMissingMetaColumns(tableName, allColumns.keys)
+            return TableSchema(allColumns.filterKeys { it !in columnManager.getMetaColumnNames() })
+        }
         return TableSchema(getColumnsFromDb(tableName))
+    }
+
+    /**
+     * Tables created by connector versions prior to 3.10.0 lack the `_airbyte_meta` and
+     * `_airbyte_generation_id` columns, and the migration that used to add them was removed in the
+     * 4.0.0 direct-load rewrite. The schema diff can't repair them either, because [discoverSchema]
+     * and [computeSchema] both exclude the meta columns. So, when the feature flag is enabled,
+     * [getColumnsFromDb] returns the meta columns too and this repair runs from [discoverSchema]
+     * (typed mode) or [ensureSchemaMatches] (raw mode), reusing that single DESCRIBE TABLE fetch.
+     */
+    private fun repairMissingMetaColumns(tableName: TableName, existingColumns: Set<String>) {
+        val missingMetaColumns =
+            columnManager.getMetaColumns().filterKeys { metaColumn ->
+                // Case-insensitive: raw mode uses lowercase names, schema mode uppercase, and
+                // QUOTED_IDENTIFIERS_IGNORE_CASE accounts may store either case.
+                existingColumns.none { it.equals(metaColumn, ignoreCase = true) }
+            }
+        if (missingMetaColumns.isNotEmpty()) {
+            log.info {
+                "Table ${tableName.toPrettyString()} is missing Airbyte meta columns " +
+                    "${missingMetaColumns.keys} (likely created by a pre-direct-load connector " +
+                    "version); adding them"
+            }
+            sqlGenerator.addMetaColumns(tableName, missingMetaColumns).forEach { execute(it) }
+        }
     }
 
     override fun computeSchema(
         stream: DestinationStream,
-        columnNameMapping: ColumnNameMapping
+        columnNameMapping: ColumnNameMapping,
     ): TableSchema {
-        return TableSchema(getColumnsFromStream(stream, columnNameMapping))
+        return TableSchema(stream.tableSchema.columnSchema.finalSchema)
     }
 
     override suspend fun applyChangeset(
@@ -218,18 +272,15 @@ class SnowflakeAirbyteClient(
     ) {
         if (
             columnChangeset.columnsToAdd.isNotEmpty() ||
-                columnChangeset.columnsToDrop.isNotEmpty() ||
                 columnChangeset.columnsToChange.isNotEmpty()
         ) {
             log.info { "Summary of the table alterations:" }
             log.info { "Added columns: ${columnChangeset.columnsToAdd}" }
-            log.info { "Deleted columns: ${columnChangeset.columnsToDrop}" }
             log.info { "Modified columns: ${columnChangeset.columnsToChange}" }
             sqlGenerator
                 .alterTable(
                     tableName,
                     columnChangeset.columnsToAdd,
-                    columnChangeset.columnsToDrop,
                     columnChangeset.columnsToChange,
                 )
                 .forEach { execute(it) }
@@ -241,7 +292,7 @@ class SnowflakeAirbyteClient(
             val sql =
                 sqlGenerator.describeTable(
                     schemaName = tableName.namespace,
-                    tableName = tableName.name
+                    tableName = tableName.name,
                 )
             dataSource.connection.use { connection ->
                 val statement = connection.createStatement()
@@ -253,10 +304,13 @@ class SnowflakeAirbyteClient(
                         val columnName = escapeJsonIdentifier(rs.getString("name"))
 
                         // Filter out airbyte columns
-                        if (airbyteColumnNames.contains(columnName)) {
+                        if (
+                            !metaColumnRepairEnabled &&
+                                columnManager.getMetaColumnNames().contains(columnName)
+                        ) {
                             continue
                         }
-                        val dataType = rs.getString("type").takeWhile { char -> char != '(' }
+                        val dataType = toCanonicalDataType(rs.getString("type"))
                         // yes, this is how we live. The value is, in fact "Y" or "N".
                         val nullable = rs.getString("null?") == "Y"
 
@@ -271,49 +325,6 @@ class SnowflakeAirbyteClient(
         }
     }
 
-    internal fun getColumnsFromStream(
-        stream: DestinationStream,
-        columnNameMapping: ColumnNameMapping
-    ): Map<String, ColumnType> =
-        snowflakeColumnUtils
-            .columnsAndTypes(stream.schema.asColumns(), columnNameMapping)
-            .filter { column -> column.columnName !in airbyteColumnNames }
-            .associate { column ->
-                // columnsAndTypes returns types as either `FOO` or `FOO NOT NULL`.
-                // so check for that suffix.
-                val nullable = !column.columnType.endsWith(NOT_NULL)
-                val type =
-                    column.columnType
-                        .takeWhile { char ->
-                            // This is to remove any precision parts of the dialect type
-                            char != '('
-                        }
-                        .removeSuffix(NOT_NULL)
-                        .trim()
-
-                column.columnName to ColumnType(type, nullable)
-            }
-
-    internal fun generateSchemaChanges(
-        columnsInDb: Set<ColumnDefinition>,
-        columnsInStream: Set<ColumnDefinition>
-    ): Triple<Set<ColumnDefinition>, Set<ColumnDefinition>, Set<ColumnDefinition>> {
-        val addedColumns =
-            columnsInStream.filter { it.name !in columnsInDb.map { col -> col.name } }.toSet()
-        val deletedColumns =
-            columnsInDb.filter { it.name !in columnsInStream.map { col -> col.name } }.toSet()
-        val commonColumns =
-            columnsInStream.filter { it.name in columnsInDb.map { col -> col.name } }.toSet()
-        val modifiedColumns =
-            commonColumns
-                .filter {
-                    val dbType = columnsInDb.find { column -> it.name == column.name }?.type
-                    it.type != dbType
-                }
-                .toSet()
-        return Triple(addedColumns, deletedColumns, modifiedColumns)
-    }
-
     override suspend fun getGenerationId(tableName: TableName): Long =
         try {
             dataSource.connection.use { connection ->
@@ -326,7 +337,7 @@ class SnowflakeAirbyteClient(
                          * format.  In order to make sure these strings will match any column names
                          * that we have formatted in-memory, re-apply the escaping.
                          */
-                        resultSet.getLong(snowflakeColumnUtils.getGenerationIdColumnName())
+                        resultSet.getLong(columnManager.getGenerationIdColumnName())
                     } else {
                         log.warn {
                             "No generation ID found for table ${tableName.toPrettyString()}, returning 0"
@@ -351,8 +362,8 @@ class SnowflakeAirbyteClient(
         execute(sqlGenerator.putInStage(tableName, tempFilePath))
     }
 
-    fun copyFromStage(tableName: TableName, filename: String) {
-        execute(sqlGenerator.copyFromStage(tableName, filename))
+    fun copyFromStage(tableName: TableName, filename: String, columnNames: List<String>) {
+        execute(sqlGenerator.copyFromStage(tableName, filename, columnNames))
     }
 
     fun describeTable(tableName: TableName): LinkedHashMap<String, String> =
@@ -416,3 +427,21 @@ fun DataSource.execute(query: String): ResultSet =
     this.connection.use { connection ->
         connection.createStatement().use { it.executeQuery(query) }
     }
+
+/** NUMBER, NUMERIC and DECIMAL are synonyms in Snowflake */
+private val NUMBER_TYPE_SYNONYMS = setOf("NUMBER", "NUMERIC", "DECIMAL")
+private val SCALE_REGEX = Regex("""\(\s*\d+\s*,\s*(\d+)\s*\)""")
+
+/** Reduces a data type (e.g. `VARCHAR(16777216)`) to the canonical type name (VARCHAR) */
+internal fun toCanonicalDataType(dataType: String): String {
+    val baseName = dataType.takeWhile { char -> char != '(' }
+    if (baseName.uppercase() !in NUMBER_TYPE_SYNONYMS) {
+        return baseName
+    }
+    val scale =
+        SCALE_REGEX.find(dataType)?.groupValues?.get(1)?.toIntOrNull()
+            ?: throw IllegalArgumentException(
+                "Expected NUMBER type with explicit precision and scale, but got: $dataType",
+            )
+    return if (scale > 0) NUMERIC_38_9.typeName else NUMBER.typeName
+}

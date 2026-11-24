@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.hubspot
@@ -15,7 +15,7 @@ sealed interface CredentialsConfig {
 class OAuthCredentialsConfig(
     val clientId: String,
     val clientSecret: String,
-    val refreshToken: String
+    val refreshToken: String,
 ) : CredentialsConfig {
     override val type: String = "OAuth"
 }

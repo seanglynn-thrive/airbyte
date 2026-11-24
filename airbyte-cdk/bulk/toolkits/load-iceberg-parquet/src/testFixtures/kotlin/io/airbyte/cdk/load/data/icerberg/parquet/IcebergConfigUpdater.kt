@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.data.icerberg.parquet
@@ -13,10 +13,10 @@ object IcebergConfigUpdater : ConfigurationUpdater {
 
     override fun setDefaultNamespace(
         config: String,
-        defaultNamespace: String
+        defaultNamespace: String,
     ): DefaultNamespaceResult =
         DefaultNamespaceResult(
             config.replace("<DEFAULT_NAMESPACE_PLACEHOLDER>", defaultNamespace),
-            defaultNamespace
+            defaultNamespace,
         )
 }

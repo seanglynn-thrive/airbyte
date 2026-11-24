@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.bigquery.write.typing_deduping
@@ -9,12 +9,12 @@ import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.orchestration.db.ColumnNameGenerator
 import io.airbyte.cdk.load.orchestration.db.FinalTableNameGenerator
 import io.airbyte.cdk.load.orchestration.db.RawTableNameGenerator
+import io.airbyte.cdk.load.orchestration.db.TableName
 import io.airbyte.cdk.load.orchestration.db.legacy_typing_deduping.TypingDedupingUtil
-import io.airbyte.cdk.load.table.TableName
 import io.airbyte.integrations.destination.bigquery.BigQuerySQLNameTransformer
 import io.airbyte.integrations.destination.bigquery.spec.BigqueryConfiguration
+import jakarta.inject.Singleton
 import java.util.Locale
-import javax.inject.Singleton
 
 private val nameTransformer = BigQuerySQLNameTransformer()
 
@@ -27,7 +27,7 @@ class BigqueryRawTableNameGenerator(val config: BigqueryConfiguration) : RawTabl
                 TypingDedupingUtil.concatenateRawTableName(
                     streamDescriptor.namespace ?: config.datasetId,
                     streamDescriptor.name,
-                )
+                ),
             ),
         )
 }

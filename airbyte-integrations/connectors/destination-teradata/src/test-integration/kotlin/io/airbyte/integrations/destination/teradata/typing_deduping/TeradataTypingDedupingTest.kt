@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.teradata.typing_deduping
@@ -56,6 +56,7 @@ open class TeradataTypingDedupingTest : AbstractTeradataTypingDedupingTest() {
             .put("raw_data_schema", raw_schema_name)
             .put("disable_type_dedupe", false)
     }
+
     /**
      * Indicates whether final table comparison should be skipped.
      *
@@ -64,6 +65,7 @@ open class TeradataTypingDedupingTest : AbstractTeradataTypingDedupingTest() {
     override fun disableFinalTableComparison(): Boolean {
         return false
     }
+
     /**
      * Provides the raw schema name used during the test.
      *

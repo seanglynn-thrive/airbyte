@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.postgres
@@ -97,7 +97,7 @@ class PostgresConfigUpdater : ConfigurationUpdater {
 
     override fun setDefaultNamespace(
         config: String,
-        defaultNamespace: String
+        defaultNamespace: String,
     ): DefaultNamespaceResult =
         DefaultNamespaceResult(config.replace("public", defaultNamespace), defaultNamespace)
 }

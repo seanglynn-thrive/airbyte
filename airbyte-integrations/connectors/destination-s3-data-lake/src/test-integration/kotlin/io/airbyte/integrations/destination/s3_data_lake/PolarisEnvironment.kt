@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.s3_data_lake
@@ -82,7 +82,7 @@ object PolarisEnvironment {
                     !waitForOrFalse(POLARIS_HEALTH_FALLBACK, 60)
             ) {
                 error(
-                    "Polaris health endpoint not ready on $POLARIS_HEALTH_PRIMARY nor $POLARIS_HEALTH_FALLBACK"
+                    "Polaris health endpoint not ready on $POLARIS_HEALTH_PRIMARY nor $POLARIS_HEALTH_FALLBACK",
                 )
             }
 
@@ -114,6 +114,8 @@ object PolarisEnvironment {
           "catalog_name": "$CATALOG_NAME",
           "client_id": "$appClientId",
           "client_secret": "$appClientSecret",
+          "scope": "PRINCIPAL_ROLE:$PRINCIPAL_ROLE",
+          "oauth2_server_uri": "$OAUTH_TOKEN_URL",
           "namespace": "<DEFAULT_NAMESPACE_PLACEHOLDER>"
         },
         "s3_bucket_name": "$BUCKET",
@@ -124,7 +126,8 @@ object PolarisEnvironment {
         "warehouse_location": "s3://$BUCKET/",
         "main_branch_name": "main"
       }
-    """.trimIndent()
+    """
+            .trimIndent()
     }
 
     /**
@@ -307,7 +310,8 @@ object PolarisEnvironment {
         }
       }
     }
-  """.trimIndent()
+  """
+                .trimIndent()
 
         val res = postJsonAdmin("/catalogs", body)
         when (res.statusCode()) {
@@ -351,7 +355,7 @@ object PolarisEnvironment {
                 )
             if (res.statusCode() !in listOf(200, 201, 204, 409)) {
                 error(
-                    "Grant privilege $priv to $catalogRole failed: ${res.statusCode()} ${res.body()}"
+                    "Grant privilege $priv to $catalogRole failed: ${res.statusCode()} ${res.body()}",
                 )
             }
         }
@@ -375,7 +379,7 @@ object PolarisEnvironment {
         val createPrincipalRes = postJsonAdmin("/principals", """{"name":"$principalName"}""")
         if (createPrincipalRes.statusCode() !in 200..299) {
             error(
-                "Principal create failed: ${createPrincipalRes.statusCode()} ${createPrincipalRes.body()}"
+                "Principal create failed: ${createPrincipalRes.statusCode()} ${createPrincipalRes.body()}",
             )
         }
         val id =
@@ -409,7 +413,7 @@ object PolarisEnvironment {
             )
         if (grantRes.statusCode() !in listOf(200, 201, 204, 409)) {
             error(
-                "Grant catalog-role -> principal-role failed: ${grantRes.statusCode()} ${grantRes.body()}"
+                "Grant catalog-role -> principal-role failed: ${grantRes.statusCode()} ${grantRes.body()}",
             )
         }
 
@@ -440,7 +444,7 @@ object PolarisEnvironment {
             )
         if (privRes.statusCode() !in listOf(200, 201, 204, 409)) {
             error(
-                "Grant privilege to catalog-role failed: ${privRes.statusCode()} ${privRes.body()}"
+                "Grant privilege to catalog-role failed: ${privRes.statusCode()} ${privRes.body()}",
             )
         }
     }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2024 Airbyte, Inc., all rights reserved. */
+/* Copyright (c) 2026 Airbyte, Inc., all rights reserved. */
 package io.airbyte.cdk.spec
 
 import io.airbyte.cdk.Operation
@@ -36,7 +36,7 @@ class ConfigurationSupplierSpecificationFactory(
     override fun create(): ConnectorSpecification {
         return extendSpecification(
             ConnectorSpecification()
-                .withConnectionSpecification(configJsonObjectSupplier.jsonSchema)
+                .withConnectionSpecification(configJsonObjectSupplier.jsonSchema),
         )
     }
 }

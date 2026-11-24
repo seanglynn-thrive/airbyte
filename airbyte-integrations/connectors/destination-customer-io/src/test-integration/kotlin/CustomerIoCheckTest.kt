@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 import io.airbyte.cdk.load.check.CheckIntegrationTest
@@ -15,12 +15,12 @@ class CustomerIoCheckTest :
             listOf(
                 CheckTestConfig(
                     configContents = Files.readString(Path.of("secrets/config.json")),
-                )
+                ),
             ),
         failConfigFilenamesAndFailureReasons =
             mapOf(
                 CheckTestConfig(
-                    configContents = Files.readString(Path.of("secrets/invalid-config.json"))
+                    configContents = Files.readString(Path.of("secrets/invalid-config.json")),
                 ) to Pattern.compile("Expected status code to be 200 but was.*"),
             ),
     )

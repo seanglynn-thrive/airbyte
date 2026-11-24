@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 package io.airbyte.integrations.destination.bigquery.formatter
 
@@ -29,7 +29,7 @@ import io.airbyte.cdk.load.data.TimestampWithTimezoneValue
 import io.airbyte.cdk.load.data.TimestampWithoutTimezoneValue
 import io.airbyte.cdk.load.message.DestinationRecordRaw
 import io.airbyte.cdk.load.message.Meta
-import io.airbyte.cdk.load.table.ColumnNameMapping
+import io.airbyte.cdk.load.orchestration.db.ColumnNameMapping
 import io.airbyte.cdk.load.util.BigDecimalUtil
 import io.airbyte.cdk.load.util.Jsons
 import io.airbyte.cdk.load.util.serializeToString
@@ -173,7 +173,7 @@ class BigQueryRecordFormatter(
                 Field.of(Meta.COLUMN_NAME_AB_LOADED_AT, StandardSQLTypeName.TIMESTAMP),
                 Field.of(Meta.COLUMN_NAME_DATA, StandardSQLTypeName.STRING),
                 Field.of(Meta.COLUMN_NAME_AB_META, StandardSQLTypeName.STRING),
-                Field.of(Meta.COLUMN_NAME_AB_GENERATION_ID, StandardSQLTypeName.INT64)
+                Field.of(Meta.COLUMN_NAME_AB_GENERATION_ID, StandardSQLTypeName.INT64),
             )
 
         // This schema defines the CSV format used for the load job. It differs from SCHEMA_V2 by
@@ -202,6 +202,7 @@ class BigQueryRecordFormatter(
                     .setMode(Field.Mode.NULLABLE)
                     .build(),
             )
+
         fun getDirectLoadSchema(
             stream: DestinationStream,
             columnNameMapping: ColumnNameMapping,
@@ -219,25 +220,25 @@ class BigQueryRecordFormatter(
 
         fun formatTimestampWithTimezone(value: EnrichedAirbyteValue): String {
             return DATETIME_WITH_TIMEZONE_FORMATTER.format(
-                (value.abValue as TimestampWithTimezoneValue).value
+                (value.abValue as TimestampWithTimezoneValue).value,
             )
         }
 
         fun formatTimestampWithoutTimezone(value: EnrichedAirbyteValue): String {
             return DATETIME_WITHOUT_TIMEZONE_FORMATTER.format(
-                (value.abValue as TimestampWithoutTimezoneValue).value
+                (value.abValue as TimestampWithoutTimezoneValue).value,
             )
         }
 
         fun formatTimeWithoutTimezone(value: EnrichedAirbyteValue): String {
             return TIME_WITHOUT_TIMEZONE_FORMATTER.format(
-                (value.abValue as TimeWithoutTimezoneValue).value
+                (value.abValue as TimeWithoutTimezoneValue).value,
             )
         }
 
         fun formatTimeWithTimezone(value: EnrichedAirbyteValue): String {
             return TIME_WITH_TIMEZONE_FORMATTER.format(
-                (value.abValue as TimeWithTimezoneValue).value
+                (value.abValue as TimeWithTimezoneValue).value,
             )
         }
 

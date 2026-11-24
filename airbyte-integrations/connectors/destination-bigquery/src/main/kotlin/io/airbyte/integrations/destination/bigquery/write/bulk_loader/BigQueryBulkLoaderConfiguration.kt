@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.bigquery.write.bulk_loader
@@ -67,7 +67,7 @@ data class BigqueryBulkLoadConfiguration(
         awsAccessKeyConfiguration =
             AWSAccessKeyConfiguration(
                 accessKeyId = credentials.accessKeyId,
-                secretAccessKey = credentials.secretAccessKey
+                secretAccessKey = credentials.secretAccessKey,
             )
 
         objectStoragePathConfiguration =
@@ -76,7 +76,7 @@ data class BigqueryBulkLoadConfiguration(
                 pathPattern =
                     "\${NAMESPACE}/\${STREAM_NAME}/\${YEAR}/\${MONTH}/\${DAY}/\${HOUR}/\${UUID}",
                 fileNamePattern = "{date}_{timestamp}_{part_number}{format_extension}",
-                resolveNamesMethod = { Transformations.toAlphanumericAndUnderscore(it) }
+                resolveNamesMethod = { Transformations.toAlphanumericAndUnderscore(it) },
             )
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.azure_blob_storage
@@ -16,17 +16,17 @@ import io.airbyte.cdk.load.test.util.OutputRecord
 class AzureBlobStorageDataDumper : DestinationDataDumper {
     override fun dumpRecords(
         spec: ConfigurationSpecification,
-        stream: DestinationStream
+        stream: DestinationStream,
     ): List<OutputRecord> = getObjectStorageDataDumper(spec, stream).dump()
 
     override fun dumpFile(
         spec: ConfigurationSpecification,
-        stream: DestinationStream
+        stream: DestinationStream,
     ): Map<String, String> = getObjectStorageDataDumper(spec, stream).dumpFile()
 
     private fun getObjectStorageDataDumper(
         spec: ConfigurationSpecification,
-        stream: DestinationStream
+        stream: DestinationStream,
     ): ObjectStorageDataDumper {
         val config: AzureBlobStorageConfiguration<*> =
             AzureBlobStorageConfigurationFactory(DestinationCatalog(listOf(stream)))

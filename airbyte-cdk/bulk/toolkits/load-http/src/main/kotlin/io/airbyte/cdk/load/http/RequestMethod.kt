@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.http
@@ -11,5 +11,5 @@ enum class RequestMethod {
     OPTIONS,
     PATCH,
     POST,
-    PUT
+    PUT,
 }

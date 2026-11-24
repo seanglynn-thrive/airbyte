@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 @file:Suppress("DEPRECATION")
@@ -26,8 +26,9 @@ import io.airbyte.protocol.protobuf.AirbyteMessage.AirbyteMessageProtobuf
 sealed interface DestinationRecordSource {
     val emittedAtMs: Long
     val sourceMeta: Meta
-    val fileReference: FileReference?
+
     fun asJsonRecord(orderedSchema: Array<FieldAccessor>): JsonNode
+
     fun asAirbyteValueProxy(): AirbyteValueProxy
 }
 
@@ -35,6 +36,7 @@ sealed interface DestinationRecordSource {
 value class DestinationRecordJsonSource(val source: AirbyteMessage) : DestinationRecordSource {
     override val emittedAtMs: Long
         get() = source.record.emittedAt
+
     override val sourceMeta: Meta
         get() =
             Meta(
@@ -45,12 +47,8 @@ value class DestinationRecordJsonSource(val source: AirbyteMessage) : Destinatio
                             change = change.change,
                             reason = change.reason,
                         )
-                    }
-                        ?: emptyList()
+                    } ?: emptyList(),
             )
-
-    override val fileReference: FileReference?
-        get() = source.record.fileReference?.let { FileReference.fromProtocol(it) }
 
     override fun asJsonRecord(orderedSchema: Array<FieldAccessor>): JsonNode = source.record.data
 
@@ -63,6 +61,7 @@ value class DestinationRecordProtobufSource(val source: AirbyteMessageProtobuf) 
     DestinationRecordSource {
     override val emittedAtMs: Long
         get() = source.record.emittedAtMs
+
     override val sourceMeta: Meta
         get() =
             Meta(
@@ -71,14 +70,10 @@ value class DestinationRecordProtobufSource(val source: AirbyteMessageProtobuf) 
                         Meta.Change(
                             field = change.field,
                             change = Change.fromValue(change.change.name),
-                            reason = Reason.fromValue(change.reason.name)
+                            reason = Reason.fromValue(change.reason.name),
                         )
-                    }
-                        ?: emptyList()
+                    } ?: emptyList(),
             )
-
-    override val fileReference: FileReference?
-        get() = null
 
     override fun asJsonRecord(orderedSchema: Array<FieldAccessor>): JsonNode =
         asAirbyteValueProxy().asJson(orderedSchema)

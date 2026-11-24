@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.stages
@@ -7,7 +7,6 @@ package io.airbyte.cdk.load.dataflow.stages
 import io.airbyte.cdk.load.command.Append
 import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.command.NamespaceMapper
-import io.airbyte.cdk.load.data.ObjectType
 import io.airbyte.cdk.load.data.StringValue
 import io.airbyte.cdk.load.dataflow.pipeline.DataFlowStageIO
 import io.airbyte.cdk.load.dataflow.state.PartitionKey
@@ -50,8 +49,6 @@ class ParseStageTest {
             DestinationStream(
                 unmappedNamespace = "test-namespace",
                 unmappedName = "test-stream",
-                importType = Append,
-                schema = ObjectType(linkedMapOf()),
                 generationId = 1L,
                 minimumGenerationId = 1L,
                 syncId = 1L,
@@ -63,8 +60,8 @@ class ParseStageTest {
                                 finalTableName =
                                     io.airbyte.cdk.load.schema.model.TableName(
                                         "test-namespace",
-                                        "test-stream"
-                                    )
+                                        "test-stream",
+                                    ),
                             ),
                         columnSchema =
                             io.airbyte.cdk.load.schema.model.ColumnSchema(
@@ -73,14 +70,14 @@ class ParseStageTest {
                                 finalSchema = mapOf(),
                             ),
                         importType = Append,
-                    )
+                    ),
             )
         rawRecord =
             DestinationRecordRaw(
                 stream = stream,
                 rawData =
                     DestinationRecordJsonSource(
-                        AirbyteMessage().withRecord(AirbyteRecordMessage().withEmittedAt(12345L))
+                        AirbyteMessage().withRecord(AirbyteRecordMessage().withEmittedAt(12345L)),
                     ),
                 serializedSizeBytes = 100,
                 airbyteRawId = UUID.randomUUID(),

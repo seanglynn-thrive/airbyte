@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.discover
@@ -34,13 +34,13 @@ class TestMetaFieldDecorator : MetaFieldDecorator {
         timestamp: OffsetDateTime,
         globalStateValue: OpaqueStateValue?,
         stream: Stream,
-        recordData: ObjectNode
+        recordData: ObjectNode,
     ) {
         recordData.putNull(CommonMetaField.CDC_DELETED_AT.id)
         @Suppress("UNCHECKED_CAST")
         recordData.set<JsonNode>(
             CommonMetaField.CDC_UPDATED_AT.id,
-            (CommonMetaField.CDC_UPDATED_AT.type.jsonEncoder as JsonEncoder<Any>).encode(timestamp)
+            (CommonMetaField.CDC_UPDATED_AT.type.jsonEncoder as JsonEncoder<Any>).encode(timestamp),
         )
         recordData.set<JsonNode>(
             GlobalCursor.id,
@@ -48,7 +48,7 @@ class TestMetaFieldDecorator : MetaFieldDecorator {
                 CdcOffsetDateTimeMetaFieldType.jsonEncoder.encode(timestamp)
             } else {
                 CdcStringMetaFieldType.jsonEncoder.encode(globalStateValue.toString())
-            }
+            },
         )
     }
 
@@ -56,7 +56,7 @@ class TestMetaFieldDecorator : MetaFieldDecorator {
         timestamp: OffsetDateTime,
         globalStateValue: OpaqueStateValue?,
         stream: Stream,
-        recordData: NativeRecordPayload
+        recordData: NativeRecordPayload,
     ) {
         // no-op
     }

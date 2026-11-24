@@ -26,6 +26,10 @@ The Nylas platform provides an integration layer that makes it easy to connect a
 | scheduled_messages | schedule_id | No pagination | ✅ |  ❌  |
 | threads | id | DefaultPaginator | ✅ |  ✅  |
 
+## IP allow list
+
+If you use Airbyte Cloud and your organization restricts access to specific IPs, add the [Airbyte Cloud IP addresses](https://docs.airbyte.com/platform/operating-airbyte/ip-allowlist) to your allow list.
+
 ## Changelog
 
 <details>
@@ -33,6 +37,40 @@ The Nylas platform provides an integration layer that makes it easy to connect a
 
 | Version | Date | Pull Request | Subject |
 |---------|------|--------------|---------|
+| 0.0.78 | 2026-11-17 | [93324](https://github.com/airbytehq/airbyte/pull/93324) | Update dependencies |
+| 0.0.77 | 2026-11-10 | [91646](https://github.com/airbytehq/airbyte/pull/91646) | Update dependencies |
+| 0.0.76 | 2026-11-03 | [90678](https://github.com/airbytehq/airbyte/pull/90678) | Update dependencies |
+| 0.0.75 | 2026-10-27 | [90023](https://github.com/airbytehq/airbyte/pull/90023) | Update dependencies |
+| 0.0.74 | 2026-10-20 | [89326](https://github.com/airbytehq/airbyte/pull/89326) | Update dependencies |
+| 0.0.73 | 2026-10-13 | [88725](https://github.com/airbytehq/airbyte/pull/88725) | Update dependencies |
+| 0.0.72 | 2026-10-07 | [88294](https://github.com/airbytehq/airbyte/pull/88294) | Skip calendars whose events return HTTP 404 from the provider instead of failing the `events` stream |
+| 0.0.71 | 2026-10-06 | [87981](https://github.com/airbytehq/airbyte/pull/87981) | Update dependencies |
+| 0.0.70 | 2026-09-29 | [87289](https://github.com/airbytehq/airbyte/pull/87289) | Update dependencies |
+| 0.0.69 | 2026-09-22 | [86759](https://github.com/airbytehq/airbyte/pull/86759) | Update dependencies |
+| 0.0.68 | 2026-09-15 | [86151](https://github.com/airbytehq/airbyte/pull/86151) | Update dependencies |
+| 0.0.67 | 2026-09-08 | [85582](https://github.com/airbytehq/airbyte/pull/85582) | Update dependencies |
+| 0.0.66 | 2026-08-18 | [84665](https://github.com/airbytehq/airbyte/pull/84665) | Update dependencies |
+| 0.0.65 | 2026-08-11 | [84026](https://github.com/airbytehq/airbyte/pull/84026) | Update dependencies |
+| 0.0.64 | 2026-08-04 | [83545](https://github.com/airbytehq/airbyte/pull/83545) | Update dependencies |
+| 0.0.63 | 2026-07-28 | [82997](https://github.com/airbytehq/airbyte/pull/82997) | Update dependencies |
+| 0.0.62 | 2026-07-21 | [82445](https://github.com/airbytehq/airbyte/pull/82445) | Update dependencies |
+| 0.0.61 | 2026-07-14 | [81895](https://github.com/airbytehq/airbyte/pull/81895) | Update dependencies |
+| 0.0.60 | 2026-06-30 | [81141](https://github.com/airbytehq/airbyte/pull/81141) | Update dependencies |
+| 0.0.59 | 2026-06-23 | [80541](https://github.com/airbytehq/airbyte/pull/80541) | Update dependencies |
+| 0.0.58 | 2026-06-16 | [79942](https://github.com/airbytehq/airbyte/pull/79942) | Update dependencies |
+| 0.0.57 | 2026-06-09 | [79387](https://github.com/airbytehq/airbyte/pull/79387) | Update dependencies |
+| 0.0.56 | 2026-06-02 | [78843](https://github.com/airbytehq/airbyte/pull/78843) | Update dependencies |
+| 0.0.55 | 2026-04-28 | [77332](https://github.com/airbytehq/airbyte/pull/77332) | Update dependencies |
+| 0.0.54 | 2026-04-21 | [76680](https://github.com/airbytehq/airbyte/pull/76680) | Update dependencies |
+| 0.0.53 | 2026-03-31 | [75739](https://github.com/airbytehq/airbyte/pull/75739) | Update dependencies |
+| 0.0.52 | 2026-03-10 | [74611](https://github.com/airbytehq/airbyte/pull/74611) | Update dependencies |
+| 0.0.51 | 2026-03-03 | [74183](https://github.com/airbytehq/airbyte/pull/74183) | Update dependencies |
+| 0.0.50 | 2026-02-17 | [73547](https://github.com/airbytehq/airbyte/pull/73547) | Update dependencies |
+| 0.0.49 | 2026-02-10 | [73063](https://github.com/airbytehq/airbyte/pull/73063) | Update dependencies |
+| 0.0.48 | 2026-02-03 | [72567](https://github.com/airbytehq/airbyte/pull/72567) | Update dependencies |
+| 0.0.47 | 2026-01-20 | [71953](https://github.com/airbytehq/airbyte/pull/71953) | Update dependencies |
+| 0.0.46 | 2026-01-14 | [71636](https://github.com/airbytehq/airbyte/pull/71636) | Update dependencies |
+| 0.0.45 | 2025-12-18 | [70578](https://github.com/airbytehq/airbyte/pull/70578) | Update dependencies |
 | 0.0.44 | 2025-11-25 | [69881](https://github.com/airbytehq/airbyte/pull/69881) | Update dependencies |
 | 0.0.43 | 2025-11-18 | [69370](https://github.com/airbytehq/airbyte/pull/69370) | Update dependencies |
 | 0.0.42 | 2025-10-29 | [68703](https://github.com/airbytehq/airbyte/pull/68703) | Update dependencies |
@@ -40,8 +78,8 @@ The Nylas platform provides an integration layer that makes it easy to connect a
 | 0.0.40 | 2025-10-14 | [67757](https://github.com/airbytehq/airbyte/pull/67757) | Update dependencies |
 | 0.0.39 | 2025-10-07 | [67415](https://github.com/airbytehq/airbyte/pull/67415) | Update dependencies |
 | 0.0.38 | 2025-09-30 | [66930](https://github.com/airbytehq/airbyte/pull/66930) | Update dependencies |
-| 0.0.37 | 2025-09-23 | [66612](https://github.com/airbytehq/airbyte/pull/66612) | Update dependencies |
-| 0.0.36 | 2025-09-09 | [65825](https://github.com/airbytehq/airbyte/pull/65825) | Update dependencies |
+| 0.0.37 | 2025-09-24 | [66612](https://github.com/airbytehq/airbyte/pull/66612) | Update dependencies |
+| 0.0.36 | 2025-09-10 | [65825](https://github.com/airbytehq/airbyte/pull/65825) | Update dependencies |
 | 0.0.35 | 2025-08-23 | [65180](https://github.com/airbytehq/airbyte/pull/65180) | Update dependencies |
 | 0.0.34 | 2025-08-09 | [64734](https://github.com/airbytehq/airbyte/pull/64734) | Update dependencies |
 | 0.0.33 | 2025-08-02 | [64190](https://github.com/airbytehq/airbyte/pull/64190) | Update dependencies |

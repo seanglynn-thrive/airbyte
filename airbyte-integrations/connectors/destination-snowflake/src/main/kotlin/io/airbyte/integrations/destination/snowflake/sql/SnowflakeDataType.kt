@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.snowflake.sql
@@ -9,8 +9,9 @@ package io.airbyte.integrations.destination.snowflake.sql
  * data types.
  */
 enum class SnowflakeDataType(val typeName: String) {
-    // Numeric types
-    NUMBER("NUMBER(38,0)"),
+    // Number is being used for Integers i.e. numbers with scale 0. Defaults to NUMBER(38,0)
+    NUMBER("NUMBER"),
+    NUMERIC_38_9("NUMERIC(38,9)"),
     FLOAT("FLOAT"),
 
     // String & binary types

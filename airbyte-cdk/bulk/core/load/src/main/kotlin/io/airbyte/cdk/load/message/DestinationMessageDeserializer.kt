@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.message
@@ -43,7 +43,7 @@ class ProtocolMessageDeserializer(
                     }
 
                 throw RuntimeException(
-                    "Failed to deserialize airbyte message (type=$type; length=${serialized.length}; reason=${t.javaClass})"
+                    "Failed to deserialize airbyte message (type=$type; length=${serialized.length}; reason=${t.javaClass})",
                 )
             }
 

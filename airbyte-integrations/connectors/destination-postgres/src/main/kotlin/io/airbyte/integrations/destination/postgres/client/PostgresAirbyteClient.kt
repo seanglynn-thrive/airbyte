@@ -1,38 +1,64 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.postgres.client
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
+import io.airbyte.cdk.ConfigErrorException
 import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.component.ColumnChangeset
+import io.airbyte.cdk.load.component.ColumnType
+import io.airbyte.cdk.load.component.ColumnTypeChange
 import io.airbyte.cdk.load.component.TableColumns
 import io.airbyte.cdk.load.component.TableOperationsClient
 import io.airbyte.cdk.load.component.TableSchema
 import io.airbyte.cdk.load.component.TableSchemaEvolutionClient
+import io.airbyte.cdk.load.message.Meta.Companion.COLUMN_NAMES
 import io.airbyte.cdk.load.message.Meta.Companion.COLUMN_NAME_AB_GENERATION_ID
+import io.airbyte.cdk.load.schema.model.TableName
 import io.airbyte.cdk.load.table.ColumnNameMapping
-import io.airbyte.cdk.load.table.TableName
+import io.airbyte.integrations.destination.postgres.schema.PostgresColumnManager
+import io.airbyte.integrations.destination.postgres.spec.PostgresConfiguration
 import io.airbyte.integrations.destination.postgres.sql.COUNT_TOTAL_ALIAS
-import io.airbyte.integrations.destination.postgres.sql.Column
-import io.airbyte.integrations.destination.postgres.sql.PostgresColumnUtils
 import io.airbyte.integrations.destination.postgres.sql.PostgresDirectLoadSqlGenerator
+import io.airbyte.integrations.destination.postgres.sql.TABLE_IS_EMPTY_ALIAS
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.micronaut.context.annotation.Value
 import jakarta.inject.Singleton
 import java.sql.ResultSet
+import java.sql.SQLException
 import javax.sql.DataSource
 
 private val log = KotlinLogging.logger {}
 
 @Singleton
+@SuppressFBWarnings(
+    value = ["SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE"],
+    justification =
+        "There is little chance of SQL injection. There is also little need for statement reuse. The basic statement is more readable than the prepared statement.",
+)
 class PostgresAirbyteClient(
     private val dataSource: DataSource,
     private val sqlGenerator: PostgresDirectLoadSqlGenerator,
-    private val postgresColumnUtils: PostgresColumnUtils
+    private val columnManager: PostgresColumnManager,
+    private val postgresConfiguration: PostgresConfiguration,
+    /**
+     * Feature flag for the pre-direct-load meta column repair in [ensureSchemaMatches]. Off by
+     * default: only customers migrating from a pre-direct-load connector version need the repair,
+     * and it is enabled for them by setting the env var
+     * `AIRBYTE_DESTINATION_POSTGRES_META_COLUMN_REPAIR=true`.
+     */
+    @Value("\${airbyte.destination.postgres.meta-column-repair:false}")
+    private val metaColumnRepairEnabled: Boolean,
 ) : TableSchemaEvolutionClient, TableOperationsClient {
 
     companion object {
         private const val COLUMN_NAME_COLUMN = "column_name"
+        /** SQLSTATE 42P01 = undefined_table; 3F000 = invalid_schema_name. */
+        private val MISSING_RELATION_SQL_STATES = setOf("42P01", "3F000")
+        /** SQLSTATE 42703 = undefined_column. */
+        private const val UNDEFINED_COLUMN_SQL_STATE = "42703"
     }
 
     override suspend fun countTable(tableName: TableName): Long? =
@@ -45,11 +71,54 @@ class PostgresAirbyteClient(
                 }
             }
         } catch (e: Exception) {
-            log.debug(e) {
-                "Table ${tableName.namespace}.${tableName.name} does not exist. Returning a null count to signal a missing table."
+            if (isMissingRelation(e)) {
+                log.debug(e) {
+                    "Table ${tableName.namespace}.${tableName.name} does not exist. Returning a null count to signal a missing table."
+                }
+                null
+            } else {
+                log.error(e) {
+                    "Failed to count rows in table ${tableName.namespace}.${tableName.name}."
+                }
+                throw e
             }
-            null
         }
+
+    /**
+     * Answers the emptiness question with an existence check instead of `COUNT(*)`, which scales
+     * with table size.
+     */
+    override suspend fun tableIsEmpty(tableName: TableName): Boolean =
+        executeQuery(sqlGenerator.tableIsEmpty(tableName)) { resultSet ->
+            !resultSet.next() || resultSet.getBoolean(TABLE_IS_EMPTY_ALIAS)
+        }
+
+    override suspend fun namespaceExists(namespace: String): Boolean {
+        return executeQuery(
+            """
+            SELECT EXISTS(
+                SELECT 1 FROM information_schema.schemata
+                WHERE schema_name = '$namespace'
+            )
+            """,
+        ) { rs ->
+            rs.next() && rs.getBoolean(1)
+        }
+    }
+
+    override suspend fun tableExists(table: TableName): Boolean {
+        return executeQuery(
+            """
+            SELECT EXISTS(
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = '${table.namespace}'
+                AND table_name = '${table.name}'
+            )
+            """,
+        ) { rs ->
+            rs.next() && rs.getBoolean(1)
+        }
+    }
 
     override suspend fun createNamespace(namespace: String) {
         try {
@@ -74,10 +143,10 @@ class PostgresAirbyteClient(
         stream: DestinationStream,
         tableName: TableName,
         columnNameMapping: ColumnNameMapping,
-        replace: Boolean
+        replace: Boolean,
     ) {
         val (createTableSql, createIndexesSql) =
-            sqlGenerator.createTable(stream, tableName, columnNameMapping, replace)
+            sqlGenerator.createTable(stream, tableName, replace)
         execute(createTableSql)
         try {
             execute(createIndexesSql)
@@ -104,74 +173,118 @@ class PostgresAirbyteClient(
     override suspend fun copyTable(
         columnNameMapping: ColumnNameMapping,
         sourceTableName: TableName,
-        targetTableName: TableName
+        targetTableName: TableName,
     ) {
-        execute(sqlGenerator.copyTable(columnNameMapping, sourceTableName, targetTableName))
+        val metaColumnNames = columnManager.getMetaColumnNames()
+        val targetColumnNames =
+            if (postgresConfiguration.legacyRawTablesOnly == true) {
+                metaColumnNames
+            } else {
+                metaColumnNames + columnNameMapping.values
+            }
+        execute(
+            sqlGenerator.copyTable(targetColumnNames.toList(), sourceTableName, targetTableName),
+        )
     }
 
     override suspend fun upsertTable(
         stream: DestinationStream,
         columnNameMapping: ColumnNameMapping,
         sourceTableName: TableName,
-        targetTableName: TableName
+        targetTableName: TableName,
     ) {
-        execute(
-            sqlGenerator.upsertTable(stream, columnNameMapping, sourceTableName, targetTableName)
-        )
+        execute(sqlGenerator.upsertTable(stream, sourceTableName, targetTableName))
     }
 
     override suspend fun dropTable(tableName: TableName) {
         execute(sqlGenerator.dropTable(tableName))
     }
 
+    /**
+     * Tables created by pre-direct-load connector versions may lack the `_airbyte_meta` and
+     * `_airbyte_generation_id` columns. The schema diff can't repair them because the stream's
+     * final schema excludes the meta columns, so [ensureSchemaMatches] detects and adds missing
+     * meta columns (behind a feature flag) before the diff DDL runs.
+     */
+    private fun repairMissingMetaColumns(
+        tableName: TableName,
+        columnsInDb: Map<String, ColumnType>,
+    ) {
+        val missingMetaColumns =
+            columnManager.getMetaColumns().filterKeys { metaColumn ->
+                columnsInDb.keys.none { it.equals(metaColumn, ignoreCase = true) }
+            }
+        if (missingMetaColumns.isNotEmpty()) {
+            log.info {
+                "Table ${tableName.namespace}.${tableName.name} is missing Airbyte meta columns " +
+                    "${missingMetaColumns.keys} (likely created by a pre-direct-load connector " +
+                    "version); adding them"
+            }
+            execute(sqlGenerator.addMetaColumns(tableName, missingMetaColumns))
+        }
+    }
+
     override suspend fun ensureSchemaMatches(
         stream: DestinationStream,
         tableName: TableName,
-        columnNameMapping: ColumnNameMapping
+        columnNameMapping: ColumnNameMapping,
     ) {
-        val columnsInDb = getColumnsFromDb(tableName)
-        val defaultColumnNames = postgresColumnUtils.defaultColumns().map { it.columnName }.toSet()
-        val columnsInStream =
-            postgresColumnUtils
-                .getTargetColumns(stream, columnNameMapping)
-                .filter { it.columnName !in defaultColumnNames }
-                .toSet()
-        val (addedColumns, deletedColumns, modifiedColumns) =
-            generateSchemaChanges(columnsInDb, columnsInStream)
+        var columnsInDb = getColumnsFromDb(tableName)
+        if (metaColumnRepairEnabled) {
+            // With the repair enabled, getColumnsFromDb also returns the airbyte meta columns:
+            // add any that are missing, then keep them out of the schema diff below.
+            repairMissingMetaColumns(tableName, columnsInDb)
+            columnsInDb = columnsInDb.filterKeys { it !in columnManager.getMetaColumnNames() }
+        }
+        // In raw tables mode, finalSchema contains just {_airbyte_data -> JSONB}
+        // In typed mode, finalSchema contains the mapped user columns
+        val columnsInStream = stream.tableSchema.columnSchema.finalSchema
+
+        val (addedColumns, _, modifiedColumns) = generateSchemaChanges(columnsInDb, columnsInStream)
 
         log.info { "Summary of the table alterations:" }
         log.info { "Added columns: $addedColumns" }
-        log.info { "Deleted columns: $deletedColumns" }
         log.info { "Modified columns: $modifiedColumns" }
 
+        // In raw tables mode, skip primary key and cursor indexes since those columns don't exist
+        // (they're stored in _airbyte_data JSONB)
+        val isRawTablesMode = postgresConfiguration.legacyRawTablesOnly
         execute(
             sqlGenerator.matchSchemas(
                 tableName = tableName,
                 columnsToAdd = addedColumns,
-                columnsToRemove = deletedColumns,
                 columnsToModify = modifiedColumns,
-                columnsInDb = columnsInDb,
                 recreatePrimaryKeyIndex =
-                    shouldRecreatePrimaryKeyIndex(stream, tableName, columnNameMapping),
-                primaryKeyColumnNames =
-                    postgresColumnUtils.getPrimaryKeysColumnNames(stream, columnNameMapping),
+                    !isRawTablesMode && shouldRecreatePrimaryKeyIndex(stream, tableName),
+                primaryKeyColumnNames = stream.tableSchema.getPrimaryKey().flatten(),
                 recreateCursorIndex =
-                    shouldRecreateCursorIndex(stream, tableName, columnNameMapping),
-                cursorColumnName =
-                    postgresColumnUtils.getCursorColumnName(stream, columnNameMapping),
-            )
+                    !isRawTablesMode && shouldRecreateCursorIndex(stream, tableName),
+                cursorColumnName = stream.tableSchema.getCursor().firstOrNull(),
+            ),
         )
     }
 
     override suspend fun discoverSchema(tableName: TableName): TableSchema {
-        TODO("Not yet implemented")
+        val columnsInDb = getColumnsFromDbForDiscovery(tableName)
+        val hasAllAirbyteColumns = columnsInDb.keys.containsAll(COLUMN_NAMES)
+
+        if (!hasAllAirbyteColumns) {
+            val message =
+                "The target table ($tableName) already exists in the destination, but does not contain Airbyte's internal columns. Airbyte can only sync to Airbyte-controlled tables. To fix this error, you must either delete the target table or add a prefix in the connection configuration in order to sync to a separate table in the destination."
+            log.error { message }
+            throw ConfigErrorException(message)
+        }
+
+        // Filter out Airbyte columns
+        val userColumns = columnsInDb.filterKeys { it !in COLUMN_NAMES }
+        return TableSchema(userColumns)
     }
 
     override fun computeSchema(
         stream: DestinationStream,
-        columnNameMapping: ColumnNameMapping
+        columnNameMapping: ColumnNameMapping,
     ): TableSchema {
-        TODO("Not yet implemented")
+        return TableSchema(stream.tableSchema.columnSchema.finalSchema)
     }
 
     override suspend fun applyChangeset(
@@ -179,10 +292,48 @@ class PostgresAirbyteClient(
         columnNameMapping: ColumnNameMapping,
         tableName: TableName,
         expectedColumns: TableColumns,
-        columnChangeset: ColumnChangeset
+        columnChangeset: ColumnChangeset,
     ) {
-        TODO("Not yet implemented")
+        if (
+            columnChangeset.columnsToAdd.isNotEmpty() ||
+                columnChangeset.columnsToChange.isNotEmpty()
+        ) {
+            log.info { "Summary of the table alterations:" }
+            log.info { "Added columns: ${columnChangeset.columnsToAdd}" }
+            log.info { "Modified columns: ${columnChangeset.columnsToChange}" }
+
+            execute(
+                sqlGenerator.matchSchemas(
+                    tableName = tableName,
+                    columnsToAdd = columnChangeset.columnsToAdd,
+                    columnsToModify = columnChangeset.columnsToChange,
+                    recreatePrimaryKeyIndex = false,
+                    primaryKeyColumnNames = emptyList(),
+                    recreateCursorIndex = false,
+                    cursorColumnName = null,
+                ),
+            )
+        }
     }
+
+    /**
+     * Gets columns from the database including their types for schema discovery. Unlike
+     * [getColumnsFromDb], this returns all columns including Airbyte metadata columns.
+     */
+    private fun getColumnsFromDbForDiscovery(tableName: TableName): Map<String, ColumnType> =
+        executeQuery(sqlGenerator.getTableSchema(tableName)) { rs ->
+            val columnsInDb: MutableMap<String, ColumnType> = mutableMapOf()
+            while (rs.next()) {
+                val columnName = rs.getString(COLUMN_NAME_COLUMN)
+                val dataType = rs.getString("data_type")
+                // PostgreSQL's information_schema always returns 'YES' or 'NO' for is_nullable
+                val isNullable = rs.getString("is_nullable") == "YES"
+
+                columnsInDb[columnName] = ColumnType(normalizePostgresType(dataType), isNullable)
+            }
+
+            columnsInDb
+        }
 
     /**
      * Checks if the primary key index matches the current stream configuration. If the primary keys
@@ -194,10 +345,8 @@ class PostgresAirbyteClient(
     private fun shouldRecreatePrimaryKeyIndex(
         stream: DestinationStream,
         tableName: TableName,
-        columnNameMapping: ColumnNameMapping
     ): Boolean {
-        val streamPrimaryKeys =
-            postgresColumnUtils.getPrimaryKeysColumnNames(stream, columnNameMapping)
+        val streamPrimaryKeys = sqlGenerator.getPrimaryKeysColumnNames(stream)
         if (streamPrimaryKeys.isEmpty()) return false
 
         val existingPrimaryKeyIndexColumns = getPrimaryKeyIndexColumns(tableName)
@@ -238,10 +387,8 @@ class PostgresAirbyteClient(
     private fun shouldRecreateCursorIndex(
         stream: DestinationStream,
         tableName: TableName,
-        columnNameMapping: ColumnNameMapping
     ): Boolean {
-        val streamCursor =
-            postgresColumnUtils.getCursorColumnName(stream, columnNameMapping) ?: return false
+        val streamCursor = sqlGenerator.getCursorColumnName(stream) ?: return false
 
         val existingCursorIndexColumn = getCursorIndexColumn(tableName)
 
@@ -256,21 +403,21 @@ class PostgresAirbyteClient(
         }
     }
 
-    internal fun getColumnsFromDb(tableName: TableName): Set<Column> =
+    internal fun getColumnsFromDb(tableName: TableName): Map<String, ColumnType> =
         executeQuery(sqlGenerator.getTableSchema(tableName)) { rs ->
-            val columnsInDb: MutableSet<Column> = mutableSetOf()
-            val defaultColumnNames =
-                postgresColumnUtils.defaultColumns().map { it.columnName }.toSet()
+            val columnsInDb = mutableMapOf<String, ColumnType>()
+            val defaultColumnNames = columnManager.getMetaColumnNames()
             while (rs.next()) {
                 val columnName = rs.getString(COLUMN_NAME_COLUMN)
 
-                // Filter out airbyte columns
-                if (defaultColumnNames.contains(columnName)) {
+                // Filter out airbyte columns (unless the meta column repair needs to see them)
+                if (!metaColumnRepairEnabled && defaultColumnNames.contains(columnName)) {
                     continue
                 }
                 val dataType = rs.getString("data_type")
+                val isNullable = rs.getString("is_nullable") == "YES"
 
-                columnsInDb.add(Column(columnName, normalizePostgresType(dataType)))
+                columnsInDb[columnName] = ColumnType(normalizePostgresType(dataType), isNullable)
             }
 
             columnsInDb
@@ -298,31 +445,21 @@ class PostgresAirbyteClient(
         }
 
     internal fun generateSchemaChanges(
-        columnsInDb: Set<Column>,
-        columnsInStream: Set<Column>
-    ): Triple<Set<Column>, Set<Column>, Set<Column>> {
-        val addedColumns =
-            columnsInStream
-                .filter { it.columnName !in columnsInDb.map { col -> col.columnName } }
-                .toSet()
-        val deletedColumns =
-            columnsInDb
-                .filter { it.columnName !in columnsInStream.map { col -> col.columnName } }
-                .toSet()
-        val commonColumns =
-            columnsInStream
-                .filter { it.columnName in columnsInDb.map { col -> col.columnName } }
-                .toSet()
-        val modifiedColumns =
-            commonColumns
-                .filter {
-                    val dbType =
-                        columnsInDb
-                            .find { column -> it.columnName == column.columnName }
-                            ?.columnTypeName
-                    it.columnTypeName != dbType
-                }
-                .toSet()
+        columnsInDb: Map<String, ColumnType>,
+        columnsInStream: Map<String, ColumnType>,
+    ): Triple<Map<String, ColumnType>, Map<String, ColumnType>, Map<String, ColumnTypeChange>> {
+        val addedColumns = columnsInStream.filterKeys { it !in columnsInDb.keys }
+        val deletedColumns = columnsInDb.filterKeys { it !in columnsInStream.keys }
+
+        val modifiedColumns = mutableMapOf<String, ColumnTypeChange>()
+        columnsInStream.forEach { (name, streamType) ->
+            val dbType = columnsInDb[name]
+            if (dbType != null && dbType.type != streamType.type) {
+                modifiedColumns[name] =
+                    ColumnTypeChange(originalType = dbType, newType = streamType)
+            }
+        }
+
         return Triple(addedColumns, deletedColumns, modifiedColumns)
     }
 
@@ -337,8 +474,21 @@ class PostgresAirbyteClient(
                 }
             }
         } catch (e: Exception) {
-            log.error(e) { "Failed to retrieve the generation ID for table $tableName" }
-            0L
+            if (isMissingRelation(e)) {
+                log.debug(e) { "Table $tableName does not exist. Returning generation ID 0." }
+                0L
+            } else if (metaColumnRepairEnabled && isUndefinedColumn(e)) {
+                // Pre-direct-load tables lack _airbyte_generation_id until ensureSchemaMatches
+                // repairs them later in the sync; treat that as generation 0 (which routes
+                // truncate syncs down the overwrite path).
+                log.warn(e) {
+                    "Table $tableName does not have a generation ID column. Returning generation ID 0."
+                }
+                0L
+            } else {
+                log.error(e) { "Failed to retrieve the generation ID for table $tableName." }
+                throw e
+            }
         }
 
     fun describeTable(tableName: TableName): List<String> =
@@ -364,8 +514,37 @@ class PostgresAirbyteClient(
 
     private fun execute(query: String) {
         log.info { query.trimIndent() }
-        dataSource.connection.use { connection ->
-            connection.createStatement().use { it.execute(query) }
+        try {
+            dataSource.connection.use { connection ->
+                connection.createStatement().use { it.execute(query) }
+            }
+        } catch (e: org.postgresql.util.PSQLException) {
+            // Handle dependent objects error (e.g., views depending on tables/columns)
+            // PostgreSQL error code 2BP01 = DEPENDENT_OBJECTS_STILL_EXIST
+            if (e.sqlState == "2BP01" || e.message?.contains("depends on") == true) {
+                val cascadeOptionMessage =
+                    if (postgresConfiguration.dropCascade == true) {
+                        "The 'Drop tables with CASCADE' option is already enabled, but the operation still failed. " +
+                            "This can happen when views have complex dependencies that CASCADE cannot automatically resolve."
+                    } else {
+                        "You can enable the 'Drop tables with CASCADE' option in the destination configuration to automatically drop dependent objects. " +
+                            "WARNING: This will delete all data in dependent objects (views, etc.)."
+                    }
+                val message =
+                    "Failed to modify table because other database objects (such as views or rules) depend on it. " +
+                        "Original error: ${e.message}\n\n" +
+                        "$cascadeOptionMessage\n\n" +
+                        "If the CASCADE option doesn't work or you want more control, you can manually drop the dependent views before running the sync, " +
+                        "then recreate them afterward. To find dependent views, you can run: " +
+                        "SELECT dependent_ns.nspname, dependent_view.relname FROM pg_depend " +
+                        "JOIN pg_rewrite ON pg_depend.objid = pg_rewrite.oid " +
+                        "JOIN pg_class as dependent_view ON pg_rewrite.ev_class = dependent_view.oid " +
+                        "JOIN pg_namespace dependent_ns ON dependent_view.relnamespace = dependent_ns.oid " +
+                        "WHERE pg_depend.refobjid = 'your_schema.your_table'::regclass;"
+                log.error { message }
+                throw ConfigErrorException(message, e)
+            }
+            throw e
         }
     }
 
@@ -377,4 +556,12 @@ class PostgresAirbyteClient(
             }
         }
     }
+
+    private fun isMissingRelation(exception: Throwable): Boolean =
+        generateSequence(exception) { it.cause }
+            .any { it is SQLException && it.sqlState in MISSING_RELATION_SQL_STATES }
+
+    private fun isUndefinedColumn(exception: Throwable): Boolean =
+        generateSequence(exception) { it.cause }
+            .any { it is SQLException && it.sqlState == UNDEFINED_COLUMN_SQL_STATE }
 }

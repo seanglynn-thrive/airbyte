@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.source.datagen.partitions
@@ -11,7 +11,7 @@ import io.airbyte.cdk.read.StreamFeedBootstrap
 
 class DataGenStreamState(
     val sharedState: DataGenSharedState,
-    val streamFeedBootstrap: StreamFeedBootstrap
+    val streamFeedBootstrap: StreamFeedBootstrap,
 ) {
     val stream: Stream
         get() = streamFeedBootstrap.feed

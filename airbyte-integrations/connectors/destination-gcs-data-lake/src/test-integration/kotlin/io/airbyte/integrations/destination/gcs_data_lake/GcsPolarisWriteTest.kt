@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.gcs_data_lake
@@ -37,8 +37,8 @@ class GcsPolarisWriteTest :
                         tableIdGenerator = SimpleTableIdGenerator(),
                         getCatalog = { spec ->
                             GcsDataLakeTestUtil.getCatalog(GcsDataLakeTestUtil.getConfig(spec))
-                        }
-                    )
+                        },
+                    ),
             ),
         destinationCleaner = NoopDestinationCleaner,
         recordMangler = io.airbyte.cdk.load.data.icerberg.parquet.IcebergExpectedRecordMapper,
@@ -49,14 +49,12 @@ class GcsPolarisWriteTest :
         schematizedObjectBehavior = SchematizedNestedValueBehavior.STRINGIFY,
         schematizedArrayBehavior = SchematizedNestedValueBehavior.PASS_THROUGH,
         unionBehavior = UnionBehavior.STRINGIFY,
-        supportFileTransfer = false,
         commitDataIncrementally = false,
         allTypesBehavior =
             StronglyTyped(integerCanBeLarge = false, nestedFloatLosesPrecision = false),
         unknownTypesBehavior = UnknownTypesBehavior.PASS_THROUGH,
         nullEqualsUnset = true,
         configUpdater = io.airbyte.cdk.load.data.icerberg.parquet.IcebergConfigUpdater,
-        useDataFlowPipeline = true
     ) {
 
     @Test
@@ -72,17 +70,16 @@ class GcsPolarisWriteTest :
             DestinationStream(
                 unmappedNamespace = randomizedNamespace,
                 unmappedName = "test_stream",
-                Append,
-                ObjectType(schema),
                 generationId = 0,
                 minimumGenerationId = 0,
-                syncId,
-                namespaceMapper = NamespaceMapper()
+                syncId = syncId,
+                namespaceMapper = NamespaceMapper(),
+                tableSchema = makeTableSchema(ObjectType(schema), Append),
             )
         val firstStream =
             makeStream(
                 syncId = 42,
-                linkedMapOf("id" to intType, "to_drop" to stringType, "same" to intType)
+                linkedMapOf("id" to intType, "to_drop" to stringType, "same" to intType),
             )
         runSync(
             updatedConfig,
@@ -92,13 +89,13 @@ class GcsPolarisWriteTest :
                     firstStream,
                     """{"id": 42, "to_drop": "val1", "same": 42}""",
                     emittedAtMs = 1234L,
-                )
-            )
+                ),
+            ),
         )
         val finalStream =
             makeStream(
                 syncId = 43,
-                linkedMapOf("id" to intType, "same" to intType, "to_add" to stringType)
+                linkedMapOf("id" to intType, "same" to intType, "to_add" to stringType),
             )
         runSync(
             updatedConfig,
@@ -108,8 +105,8 @@ class GcsPolarisWriteTest :
                     finalStream,
                     """{"id": 42, "same": "43", "to_add": "val3"}""",
                     emittedAtMs = 1234,
-                )
-            )
+                ),
+            ),
         )
         dumpAndDiffRecords(
             parsedConfig,
@@ -125,7 +122,7 @@ class GcsPolarisWriteTest :
                     generationId = 0,
                     data = mapOf("id" to 42, "same" to 43, "to_add" to "val3"),
                     airbyteMeta = OutputRecord.Meta(syncId = 43),
-                )
+                ),
             ),
             finalStream,
             primaryKey = listOf(listOf("id")),

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.transform.medium
@@ -37,6 +37,7 @@ import io.airbyte.cdk.load.data.TimestampWithTimezoneValue
 import io.airbyte.cdk.load.data.TimestampWithoutTimezoneValue
 import io.airbyte.cdk.load.data.UnionType
 import io.airbyte.cdk.load.data.UnknownType
+import io.airbyte.cdk.load.dataflow.config.model.MediumConverterConfig
 import io.airbyte.cdk.load.dataflow.state.PartitionKey
 import io.airbyte.cdk.load.dataflow.transform.ValidationResult
 import io.airbyte.cdk.load.dataflow.transform.ValueCoercer
@@ -97,6 +98,7 @@ class ProtobufRecordConversionTest {
             object : ValueCoercer {
                 val INT64_MAX = BigInteger(Long.MAX_VALUE.toString())
                 val INT64_MIN = BigInteger(Long.MIN_VALUE.toString())
+
                 override fun map(value: EnrichedAirbyteValue): EnrichedAirbyteValue {
                     return value
                 }
@@ -158,19 +160,19 @@ class ProtobufRecordConversionTest {
                 encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE),
                 encoder.encode(
                     OffsetTime.parse("23:59:59+02:00"),
-                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
                 ),
                 encoder.encode(
                     LocalTime.parse("23:59:59"),
-                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
                 ),
                 encoder.encode(
                     OffsetDateTime.parse("2025-06-17T23:59:59+02:00"),
-                    LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE
+                    LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE,
                 ),
                 encoder.encode(
                     LocalDateTime.parse("2025-06-17T23:59:59"),
-                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
                 ),
                 encoder.encode("""["a","b"]""", LeafAirbyteSchemaType.JSONB),
                 encoder.encode("""{"k":"v"}""", LeafAirbyteSchemaType.JSONB),
@@ -184,33 +186,33 @@ class ProtobufRecordConversionTest {
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMetaChange.newBuilder()
                         .setField("x")
                         .setChange(
-                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED
+                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED,
                         )
                         .setReason(
                             AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType
-                                .DESTINATION_SERIALIZATION_ERROR
+                                .DESTINATION_SERIALIZATION_ERROR,
                         ),
                 )
                 .addChanges(
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMetaChange.newBuilder()
                         .setField("y")
                         .setChange(
-                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED
+                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED,
                         )
                         .setReason(
                             AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType
-                                .SOURCE_SERIALIZATION_ERROR
+                                .SOURCE_SERIALIZATION_ERROR,
                         ),
                 )
                 .addChanges(
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMetaChange.newBuilder()
                         .setField("z")
                         .setChange(
-                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.TRUNCATED
+                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.TRUNCATED,
                         )
                         .setReason(
                             AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType
-                                .SOURCE_RECORD_SIZE_LIMITATION
+                                .SOURCE_RECORD_SIZE_LIMITATION,
                         ),
                 )
                 .build()
@@ -244,7 +246,7 @@ class ProtobufRecordConversionTest {
                     "obj_col" to
                         FieldType(
                             ObjectType(linkedMapOf("k" to FieldType(StringType, false))),
-                            false
+                            false,
                         ),
                     "union_col" to
                         FieldType(
@@ -257,7 +259,7 @@ class ProtobufRecordConversionTest {
                             ),
                             false,
                         ),
-                    "unknown_col" to FieldType(UnknownType(Jsons.emptyObject()), false)
+                    "unknown_col" to FieldType(UnknownType(Jsons.emptyObject()), false),
                 ),
             )
 
@@ -265,13 +267,12 @@ class ProtobufRecordConversionTest {
             every { this@mockk.airbyteValueProxyFieldAccessors } returns fieldAccessors
             every { this@mockk.syncId } returns this@ProtobufRecordConversionTest.syncId
             every { this@mockk.generationId } returns this@ProtobufRecordConversionTest.generationId
-            every { this@mockk.schema } returns dummyType
             every { this@mockk.mappedDescriptor } returns DestinationStream.Descriptor("", "dummy")
             every { this@mockk.unmappedDescriptor } returns
                 DestinationStream.Descriptor("", "dummy")
             every { this@mockk.unknownColumnChanges } returns
-                dummyType.computeUnknownColumnChanges()
-            // Add tableSchema mock for column name mapping
+                dummyType.properties.computeUnknownColumnChanges()
+            // Add tableSchema mock for column name mapping and schema
             every { this@mockk.tableSchema } returns
                 mockk {
                     every { getFinalColumnName(any()) } answers
@@ -279,25 +280,26 @@ class ProtobufRecordConversionTest {
                             val columnName = firstArg<String>()
                             "mapped_$columnName"
                         }
+                    every { columnSchema } returns
+                        mockk { every { inputSchema } returns dummyType.properties }
                 }
         }
 
         record =
             mockk(relaxed = false) {
                 every { asJsonRecord() } answers { callOriginal() }
-                every { asEnrichedDestinationRecordAirbyteValue(any(), any()) } answers
+                every { asEnrichedDestinationRecordAirbyteValue(any(), any(), any()) } answers
                     {
                         callOriginal()
                     }
                 every { this@mockk.airbyteRawId } returns uuid
-                every { this@mockk.schema } returns this@ProtobufRecordConversionTest.stream.schema
-                every { this@mockk.schemaFields } returns
-                    (this@ProtobufRecordConversionTest.stream.schema as ObjectType).properties
+                every { this@mockk.schemaFields } returns dummyType.properties
                 every { this@mockk.rawData } returns protoSource!!
                 every { this@mockk.stream } returns this@ProtobufRecordConversionTest.stream
             }
 
-        converter = ProtobufConverter(valueCoercer, validationResultHandler)
+        converter =
+            ProtobufConverter(valueCoercer, validationResultHandler, MediumConverterConfig())
     }
 
     @AfterEach fun tearDown() = unmockkAll()
@@ -322,7 +324,7 @@ class ProtobufRecordConversionTest {
                 "mapped_ts_no_tz_col",
                 "mapped_array_col",
                 "mapped_obj_col",
-                "mapped_union_col"
+                "mapped_union_col",
             )
         val actualUserFields = result.keys.filter { !it.startsWith("_airbyte_") }.toSet()
         assertEquals(expectedUserFields, actualUserFields)
@@ -511,19 +513,19 @@ class ProtobufRecordConversionTest {
                 encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE),
                 encoder.encode(
                     OffsetTime.parse("23:59:59+02:00"),
-                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
                 ),
                 encoder.encode(
                     LocalTime.parse("23:59:59"),
-                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
                 ),
                 encoder.encode(
                     OffsetDateTime.parse("2025-06-17T23:59:59+02:00"),
-                    LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE
+                    LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE,
                 ),
                 encoder.encode(
                     LocalDateTime.parse("2025-06-17T23:59:59"),
-                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
                 ),
                 encoder.encode("""["a","b"]""", LeafAirbyteSchemaType.JSONB),
                 encoder.encode("""{"k":"v"}""", LeafAirbyteSchemaType.JSONB),
@@ -551,7 +553,7 @@ class ProtobufRecordConversionTest {
         assertEquals("NULLED", (intColError!!.values["change"] as StringValue).value)
         assertEquals(
             "DESTINATION_FIELD_SIZE_LIMITATION",
-            (intColError.values["reason"] as StringValue).value
+            (intColError.values["reason"] as StringValue).value,
         )
     }
 
@@ -566,7 +568,7 @@ class ProtobufRecordConversionTest {
                         .setEpochSecond(Long.MAX_VALUE) // Invalid - will cause overflow
                         .setNano(999999999)
                         .setOffsetSeconds(7200)
-                        .build()
+                        .build(),
                 )
 
         val invalidTimestampProtoValues =
@@ -578,16 +580,16 @@ class ProtobufRecordConversionTest {
                 encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE),
                 encoder.encode(
                     OffsetTime.parse("23:59:59+02:00"),
-                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
                 ),
                 encoder.encode(
                     LocalTime.parse("23:59:59"),
-                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
                 ),
                 invalidTimestampValue, // Invalid timestamp
                 encoder.encode(
                     LocalDateTime.parse("2025-06-17T23:59:59"),
-                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
                 ),
                 encoder.encode("""["a","b"]""", LeafAirbyteSchemaType.JSONB),
                 encoder.encode("""{"k":"v"}""", LeafAirbyteSchemaType.JSONB),
@@ -611,13 +613,14 @@ class ProtobufRecordConversionTest {
 
         // Verify that parsing failure is present in the changes
         val changes = changesArray.values.filterIsInstance<ObjectValue>()
-        val timestampError =
-            changes.find { (it.values["field"] as StringValue).value == "ts_tz_col" }
+        val timestampError = changes.find {
+            (it.values["field"] as StringValue).value == "ts_tz_col"
+        }
         assertNotNull(timestampError)
         assertEquals("NULLED", (timestampError!!.values["change"] as StringValue).value)
         assertEquals(
             "DESTINATION_SERIALIZATION_ERROR",
-            (timestampError.values["reason"] as StringValue).value
+            (timestampError.values["reason"] as StringValue).value,
         )
     }
 
@@ -649,19 +652,19 @@ class ProtobufRecordConversionTest {
                 encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE),
                 encoder.encode(
                     OffsetTime.parse("23:59:59+02:00"),
-                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
                 ),
                 encoder.encode(
                     LocalTime.parse("23:59:59"),
-                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
                 ),
                 encoder.encode(
                     OffsetDateTime.parse("2025-06-17T23:59:59+02:00"),
-                    LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE
+                    LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE,
                 ),
                 encoder.encode(
                     LocalDateTime.parse("2025-06-17T23:59:59"),
-                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
                 ),
                 encoder.encode("""[]""", LeafAirbyteSchemaType.JSONB), // Empty array
                 encoder.encode("""{}""", LeafAirbyteSchemaType.JSONB), // Empty object
@@ -698,19 +701,19 @@ class ProtobufRecordConversionTest {
                 invalidDateValue, // Wrong setter used - should use date setter, not setString()
                 encoder.encode(
                     OffsetTime.parse("23:59:59+02:00"),
-                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
                 ),
                 encoder.encode(
                     LocalTime.parse("23:59:59"),
-                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
                 ),
                 encoder.encode(
                     OffsetDateTime.parse("2025-06-17T23:59:59+02:00"),
-                    LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE
+                    LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE,
                 ),
                 encoder.encode(
                     LocalDateTime.parse("2025-06-17T23:59:59"),
-                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE
+                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
                 ),
                 encoder.encode("""["a","b"]""", LeafAirbyteSchemaType.JSONB),
                 encoder.encode("""{"k":"v"}""", LeafAirbyteSchemaType.JSONB),
@@ -735,7 +738,7 @@ class ProtobufRecordConversionTest {
     }
 
     private fun buildModifiedRecord(
-        protoValues: List<AirbyteRecordMessage.AirbyteValueProtobuf>
+        protoValues: List<AirbyteRecordMessage.AirbyteValueProtobuf>,
     ): DestinationRecordProtobufSource {
         val recordProto =
             AirbyteRecordMessage.AirbyteRecordMessageProtobuf.newBuilder()

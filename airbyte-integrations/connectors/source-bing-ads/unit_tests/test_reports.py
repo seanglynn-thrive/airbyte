@@ -6,7 +6,7 @@ import pytest
 from conftest import create_zip_from_csv, find_stream, get_source
 from freezegun import freeze_time
 
-from airbyte_cdk.models import SyncMode
+from airbyte_cdk.models import FailureType, SyncMode
 from airbyte_cdk.test.catalog_builder import CatalogBuilder
 from airbyte_cdk.test.entrypoint_wrapper import read
 from airbyte_cdk.test.state_builder import StateBuilder
@@ -115,6 +115,73 @@ def test_get_report_record_timestamp_without_aggregation(config, mock_user_query
         stream_report.retriever.record_selector.filter_and_transform(all_data=[record], stream_state={}, stream_slice={}, records_schema={})
     )[0]
     assert transformed_record["Date"] == expected_record["Date"]
+
+
+def test_search_query_performance_primary_key_distinguishes_rows_by_all_requested_dimensions(config):
+    stream = find_stream("search_query_performance_report_daily", config)
+    assert stream.primary_key == [
+        "TimePeriod",
+        "CustomerId",
+        "AccountId",
+        "CampaignId",
+        "AdGroupId",
+        "AdId",
+        "AdGroupCriterionId",
+        "KeywordId",
+        "Keyword",
+        "SearchQuery",
+        "AdType",
+        "CampaignType",
+        "Language",
+        "Network",
+        "DeviceType",
+        "DeviceOS",
+        "BidMatchType",
+        "DeliveredMatchType",
+        "TopVsOther",
+        "DestinationUrl",
+        "Goal",
+        "GoalType",
+    ]
+    record = {
+        "TimePeriod": "2025-01-01",
+        "CustomerId": "111111",
+        "AccountId": "222222",
+        "CampaignId": "333333",
+        "AdGroupId": "444444",
+        "AdId": "555555",
+        "AdGroupCriterionId": "666666",
+        "KeywordId": "777777",
+        "Keyword": "airbyte",
+        "SearchQuery": "airbyte cloud",
+        "AdType": "ExpandedText",
+        "CampaignType": "Search",
+        "Language": "English",
+        "Network": "OwnedAndOperatedAndSyndicatedSearch",
+        "DeviceType": "Computer",
+        "DeviceOS": "Windows",
+        "BidMatchType": "Exact",
+        "DeliveredMatchType": "Exact",
+        "TopVsOther": "Top",
+        "DestinationUrl": "https://airbyte.example/landing-a",
+        "Goal": "Signup",
+        "GoalType": "Url",
+    }
+    duplicate_old_key_record = {
+        **record,
+        "CustomerId": "111112",
+        "AdGroupId": "444445",
+        "AdId": "555556",
+        "AdGroupCriterionId": "666667",
+        "KeywordId": "777778",
+        "Network": "Content",
+        "BidMatchType": "Phrase",
+        "DestinationUrl": "https://airbyte.example/landing-b",
+        "Goal": "Trial",
+        "GoalType": "Event",
+    }
+
+    assert tuple(record[field] for field in stream.primary_key) != tuple(duplicate_old_key_record[field] for field in stream.primary_key)
 
 
 @freeze_time("2024-01-01")
@@ -264,3 +331,88 @@ def test_custom_report_name_conversion(test_name, config, custom_report_config, 
         custom_stream is not None
     ), f"Expected custom report stream '{expected_name}' not found. Available streams: {[s.name for s in streams]}"
     assert custom_stream.name == expected_name
+
+
+REPORT_SUBMIT_URL = "https://reporting.api.bingads.microsoft.com/Reporting/v13/GenerateReport/Submit"
+ACCOUNT_NOT_AUTHORIZED_MESSAGE = (
+    "The authenticated Bing Ads user lacks access to at least one account in the report request "
+    "(error 2003, AccountNotAuthorized). Grant that user access to the account in Microsoft Advertising."
+)
+# The fault body the Reporting API sends with HTTP 400: the cause is in OperationErrors[].Code.
+ACCOUNT_NOT_AUTHORIZED_FAULT = {
+    "OperationErrors": [
+        {
+            "Code": 2003,
+            "ErrorCode": "AccountNotAuthorized",
+            "Details": "",
+            "Message": (
+                "The specified report request contains at least one account which you have insufficient privileges to access. "
+                "Please submit a report request for accounts that you are authorized to access."
+            ),
+        }
+    ],
+    "BatchErrors": [],
+    "TrackingId": "00000000-0000-0000-0000-000000000000",
+    "Type": "ApiFaultDetail",
+}
+REQUIRED_COLUMNS_FAULT = {
+    "OperationErrors": [
+        {
+            "Code": 2015,
+            "ErrorCode": "ReportingServiceRequiredColumnsNotSelected",
+            "Details": "",
+            "Message": "The list of columns to include in the report must contain all required columns.",
+        }
+    ],
+    "BatchErrors": [],
+    "TrackingId": "00000000-0000-0000-0000-000000000000",
+    "Type": "ApiFaultDetail",
+}
+
+
+def _read_errors(requests_mock, config, stream_name, fault):
+    requests_mock.post(REPORT_SUBMIT_URL, status_code=400, json=fault)
+    catalog = CatalogBuilder().with_stream(stream_name, SyncMode.full_refresh).build()
+    output = read(get_source(config), config, catalog)
+    assert output.errors, "Expected error trace messages but got none"
+    return [message.trace.error for message in output.errors]
+
+
+@freeze_time("2024-01-01")
+def test_report_account_not_authorized_is_config_error(mock_auth_token, mock_user_query, mock_account_query, requests_mock):
+    errors = _read_errors(requests_mock, TEST_CONFIG, "account_performance_report_daily", ACCOUNT_NOT_AUTHORIZED_FAULT)
+
+    assert errors[0].failure_type == FailureType.config_error
+    assert errors[0].message == ACCOUNT_NOT_AUTHORIZED_MESSAGE
+
+
+@freeze_time("2024-01-01")
+def test_report_other_bad_request_stays_system_error(mock_auth_token, mock_user_query, mock_account_query, requests_mock):
+    errors = _read_errors(requests_mock, TEST_CONFIG, "account_performance_report_daily", REQUIRED_COLUMNS_FAULT)
+
+    assert all(error.message != ACCOUNT_NOT_AUTHORIZED_MESSAGE for error in errors)
+    assert any(error.failure_type == FailureType.system_error and "Bad request" in error.message for error in errors)
+
+
+@freeze_time("2024-01-01")
+@pytest.mark.parametrize(
+    "fault,expected_message_start",
+    [
+        pytest.param(ACCOUNT_NOT_AUTHORIZED_FAULT, ACCOUNT_NOT_AUTHORIZED_MESSAGE, id="account_not_authorized"),
+        pytest.param(REQUIRED_COLUMNS_FAULT, "Reporting Columns are invalid.", id="other_bad_request_keeps_invalid_columns_message"),
+    ],
+)
+def test_custom_report_bad_request_messages(
+    fault, expected_message_start, mock_auth_token, mock_user_query, mock_account_query, requests_mock
+):
+    custom_report = {
+        "name": "custom_account_report",
+        "reporting_object": "AccountPerformanceReportRequest",
+        "report_columns": ["AccountId", "TimePeriod", "Impressions"],
+        "report_aggregation": "Daily",
+    }
+    config = {**TEST_CONFIG, "custom_reports": [custom_report]}
+    errors = _read_errors(requests_mock, config, custom_report["name"], fault)
+
+    assert errors[0].failure_type == FailureType.config_error
+    assert errors[0].message.startswith(expected_message_start)

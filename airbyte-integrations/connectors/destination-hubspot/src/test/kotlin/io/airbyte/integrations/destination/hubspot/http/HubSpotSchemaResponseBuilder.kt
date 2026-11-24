@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.hubspot.http
@@ -14,7 +14,7 @@ class HubSpotCustomObjectSchemaResponseBuilder {
     private val results = response.putArray("results")
 
     fun withResult(
-        builder: HubSpotSchemaResponseBuilder
+        builder: HubSpotSchemaResponseBuilder,
     ): HubSpotCustomObjectSchemaResponseBuilder {
         results.add(builder.schema)
         return this
