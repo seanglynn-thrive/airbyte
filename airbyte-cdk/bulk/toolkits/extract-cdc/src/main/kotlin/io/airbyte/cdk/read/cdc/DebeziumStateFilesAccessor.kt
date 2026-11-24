@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 package io.airbyte.cdk.read.cdc
 
@@ -125,7 +125,7 @@ class DebeziumStateFilesAccessor : AutoCloseable {
 
         private fun doWithFileSchemaHistory(
             schemaFilePath: Path,
-            block: (FileSchemaHistory) -> Unit
+            block: (FileSchemaHistory) -> Unit,
         ) {
             val fileSchemaHistory = FileSchemaHistory()
             fileSchemaHistory.configure(
@@ -134,7 +134,7 @@ class DebeziumStateFilesAccessor : AutoCloseable {
                     .build(),
                 HistoryRecordComparator.INSTANCE,
                 SchemaHistoryListener.NOOP,
-                false
+                false,
             )
             fileSchemaHistory.start()
             block(fileSchemaHistory)

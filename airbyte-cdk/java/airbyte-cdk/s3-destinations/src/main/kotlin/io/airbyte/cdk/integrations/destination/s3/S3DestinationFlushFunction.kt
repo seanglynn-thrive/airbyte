@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.integrations.destination.s3
@@ -18,7 +18,7 @@ import java.util.stream.Stream
 class S3DestinationFlushFunction(
     override val optimalBatchSizeBytes: Long,
     private val strategyProvider: () -> BufferingStrategy,
-    private val generationAndSyncIds: Map<StreamDescriptor, Pair<Long, Long>> = emptyMap()
+    private val generationAndSyncIds: Map<StreamDescriptor, Pair<Long, Long>> = emptyMap(),
 ) : DestinationFlushFunction {
 
     override fun flush(streamDescriptor: StreamDescriptor, stream: Stream<PartialAirbyteMessage>) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.test.fixtures.legacy
@@ -17,6 +17,7 @@ object Exceptions {
      *
      * @param callable
      * - function that throws a checked exception.
+     *
      * @param <T> - return type of the function.
      * @return object that the function returns. </T>
      */
@@ -44,7 +45,7 @@ object Exceptions {
 
     private fun castCheckedToRuntime(
         voidCallable: Procedure,
-        exceptionFactory: Function<Exception, java.lang.RuntimeException>
+        exceptionFactory: Function<Exception, java.lang.RuntimeException>,
     ) {
         try {
             voidCallable.call()

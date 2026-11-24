@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.clickhouse.write.transform
@@ -20,6 +20,7 @@ import io.airbyte.cdk.load.data.TimeWithoutTimezoneValue
 import io.airbyte.cdk.load.data.TimestampWithTimezoneValue
 import io.airbyte.cdk.load.data.TimestampWithoutTimezoneValue
 import io.airbyte.cdk.load.data.UnionType
+import io.airbyte.cdk.load.dataflow.transform.ValidationResult
 import io.airbyte.integrations.destination.clickhouse.write.transform.ClickhouseCoercer.Constants.DATE32_MAX
 import io.airbyte.integrations.destination.clickhouse.write.transform.ClickhouseCoercer.Constants.DATE32_MIN
 import io.airbyte.integrations.destination.clickhouse.write.transform.ClickhouseCoercer.Constants.DECIMAL128_MAX
@@ -41,8 +42,8 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetTime
 import java.time.ZoneOffset
-import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
@@ -60,9 +61,7 @@ class ClickhouseCoercerTest {
 
         val result = coercer.validate(input)
 
-        assertEquals(input, result)
-        assertEquals(input.abValue, result.abValue)
-        assertEquals(mutableListOf(), result.changes)
+        assertEquals(ValidationResult.Valid, result)
     }
 
     @ParameterizedTest
@@ -72,10 +71,10 @@ class ClickhouseCoercerTest {
 
         val result = coercer.validate(input)
 
-        assertEquals(NullValue, result.abValue)
+        assertEquals(ValidationResult.ShouldNullify::class, result::class)
         assertEquals(
             AirbyteRecordMessageMetaChange.Reason.DESTINATION_FIELD_SIZE_LIMITATION,
-            result.changes[0].reason
+            (result as ValidationResult.ShouldNullify).reason,
         )
     }
 
@@ -86,9 +85,7 @@ class ClickhouseCoercerTest {
 
         val result = coercer.validate(input)
 
-        assertEquals(input, result)
-        assertEquals(input.abValue, result.abValue)
-        assertEquals(mutableListOf(), result.changes)
+        assertEquals(ValidationResult.Valid, result)
     }
 
     @ParameterizedTest
@@ -98,10 +95,10 @@ class ClickhouseCoercerTest {
 
         val result = coercer.validate(input)
 
-        assertEquals(NullValue, result.abValue)
+        assertEquals(ValidationResult.ShouldNullify::class, result::class)
         assertEquals(
             AirbyteRecordMessageMetaChange.Reason.DESTINATION_FIELD_SIZE_LIMITATION,
-            result.changes[0].reason
+            (result as ValidationResult.ShouldNullify).reason,
         )
     }
 
@@ -113,9 +110,7 @@ class ClickhouseCoercerTest {
 
         val result = coercer.validate(input)
 
-        assertEquals(input, result)
-        assertEquals(input.abValue, result.abValue)
-        assertEquals(mutableListOf(), result.changes)
+        assertEquals(ValidationResult.Valid, result)
     }
 
     @ParameterizedTest
@@ -126,26 +121,24 @@ class ClickhouseCoercerTest {
 
         val result = coercer.validate(input)
 
-        assertEquals(NullValue, result.abValue)
+        assertEquals(ValidationResult.ShouldNullify::class, result::class)
         assertEquals(
             AirbyteRecordMessageMetaChange.Reason.DESTINATION_FIELD_SIZE_LIMITATION,
-            result.changes[0].reason
+            (result as ValidationResult.ShouldNullify).reason,
         )
     }
 
     @ParameterizedTest
     @MethodSource("validDates")
     fun `validate and coerces timestamps with timezones - valid values are left unchanged`(
-        value: Long
+        value: Long,
     ) {
         val timestamp = value.toAirbyteTimestampWithTimezoneValue()
         val input = Fixtures.mockCoercedValue(timestamp)
 
         val result = coercer.validate(input)
 
-        assertEquals(input, result)
-        assertEquals(input.abValue, result.abValue)
-        assertEquals(mutableListOf(), result.changes)
+        assertEquals(ValidationResult.Valid, result)
     }
 
     @ParameterizedTest
@@ -156,42 +149,40 @@ class ClickhouseCoercerTest {
 
         val result = coercer.validate(input)
 
-        assertEquals(NullValue, result.abValue)
+        assertEquals(ValidationResult.ShouldNullify::class, result::class)
         assertEquals(
             AirbyteRecordMessageMetaChange.Reason.DESTINATION_FIELD_SIZE_LIMITATION,
-            result.changes[0].reason
+            (result as ValidationResult.ShouldNullify).reason,
         )
     }
 
     @ParameterizedTest
     @MethodSource("validDates")
     fun `validate and coerces timestamps without timezones - valid values are left unchanged`(
-        value: Long
+        value: Long,
     ) {
         val timestamp = value.toAirbyteTimestampWithoutTimezoneValue()
         val input = Fixtures.mockCoercedValue(timestamp)
 
         val result = coercer.validate(input)
 
-        assertEquals(input, result)
-        assertEquals(input.abValue, result.abValue)
-        assertEquals(mutableListOf(), result.changes)
+        assertEquals(ValidationResult.Valid, result)
     }
 
     @ParameterizedTest
     @MethodSource("invalidDates")
     fun `validate and coerces timestamps without timezones - invalid values are nulled`(
-        value: Long
+        value: Long,
     ) {
         val timestamp = value.toAirbyteTimestampWithoutTimezoneValue()
         val input = Fixtures.mockCoercedValue(timestamp)
 
         val result = coercer.validate(input)
 
-        assertEquals(NullValue, result.abValue)
+        assertEquals(ValidationResult.ShouldNullify::class, result::class)
         assertEquals(
             AirbyteRecordMessageMetaChange.Reason.DESTINATION_FIELD_SIZE_LIMITATION,
-            result.changes[0].reason
+            (result as ValidationResult.ShouldNullify).reason,
         )
     }
 
@@ -250,6 +241,7 @@ class ClickhouseCoercerTest {
                 Arguments.of("100000000000000000000000000000000000001"),
                 Arguments.of("999999999999999999999999999999999999999.9"),
                 Arguments.of("-999999999999999999999999999999999999999.12"),
+                Arguments.of("3.4028234663852886E+37"),
             )
 
         @JvmStatic
@@ -308,8 +300,8 @@ class ClickhouseCoercerTest {
                 Arguments.of(StringValue("this should just stay the same")),
                 Arguments.of(
                     ObjectValue(
-                        linkedMapOf("cat" to StringValue("dog"), "bird" to StringValue("dog"))
-                    )
+                        linkedMapOf("cat" to StringValue("dog"), "bird" to StringValue("dog")),
+                    ),
                 ),
                 Arguments.of(ArrayValue(listOf(StringValue("cat"), StringValue("dog")))),
                 Arguments.of(BooleanValue(true)),
@@ -331,12 +323,13 @@ class ClickhouseCoercerTest {
 
         fun Long.toAirbyteTimestampWithTimezoneValue() =
             TimestampWithTimezoneValue(
-                LocalDateTime.of(LocalDate.ofEpochDay(this), LocalTime.MAX).atOffset(ZoneOffset.UTC)
+                LocalDateTime.of(LocalDate.ofEpochDay(this), LocalTime.MAX)
+                    .atOffset(ZoneOffset.UTC),
             )
 
         fun Long.toAirbyteTimestampWithoutTimezoneValue() =
             TimestampWithoutTimezoneValue(
-                LocalDateTime.of(LocalDate.ofEpochDay(this), LocalTime.MAX)
+                LocalDateTime.of(LocalDate.ofEpochDay(this), LocalTime.MAX),
             )
 
         fun mockCoercedValue(value: AirbyteValue) =

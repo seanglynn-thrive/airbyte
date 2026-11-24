@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.pipeline
@@ -45,6 +45,7 @@ class PipelineCompletionHandlerTest {
                 aggStore = aggStore,
                 stateHistogramStore = stateHistogramStore,
                 statsStore = statsStore,
+                dispatcher = kotlinx.coroutines.Dispatchers.Unconfined,
             )
     }
 
@@ -78,7 +79,7 @@ class PipelineCompletionHandlerTest {
                 partitionBytesHistogram = mockBytesHistogram1,
                 stalenessTrigger = mockk(),
                 recordCountTrigger = mockk(),
-                estimatedBytesTrigger = mockk()
+                estimatedBytesTrigger = mockk(),
             )
 
         val aggregateEntry2 =
@@ -89,7 +90,7 @@ class PipelineCompletionHandlerTest {
                 partitionBytesHistogram = mockBytesHistogram2,
                 stalenessTrigger = mockk(),
                 recordCountTrigger = mockk(),
-                estimatedBytesTrigger = mockk()
+                estimatedBytesTrigger = mockk(),
             )
 
         every { aggStore.getAll() } returns listOf(aggregateEntry1, aggregateEntry2)
@@ -144,7 +145,7 @@ class PipelineCompletionHandlerTest {
                 partitionBytesHistogram = mockBytesHistogram,
                 stalenessTrigger = mockk(),
                 recordCountTrigger = mockk(),
-                estimatedBytesTrigger = mockk()
+                estimatedBytesTrigger = mockk(),
             )
 
         every { aggStore.getAll() } returns listOf(aggregateEntry)

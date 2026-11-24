@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.hubspot
@@ -18,7 +18,7 @@ class HubSpotConfigurationFactory :
                 OAuthCredentialsConfig(
                     oauthCredentials.clientId,
                     oauthCredentials.clientSecret,
-                    oauthCredentials.refreshToken
+                    oauthCredentials.refreshToken,
                 ),
             objectStorageConfig = pojo.objectStorageConfig.toObjectStorageConfig(),
         )

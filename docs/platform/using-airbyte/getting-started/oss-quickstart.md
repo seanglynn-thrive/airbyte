@@ -9,7 +9,7 @@ import { faWindows } from "@fortawesome/free-brands-svg-icons";
 
 # Quickstart
 
-This quickstart guides you through deploying a local instance of Airbyte Self-Managed Community, Airbyte's open source product. Setup only takes a few minutes, and you can start moving data immediately.
+This quickstart guides you through deploying a local instance of Airbyte Core, Airbyte's open source product. Setup only takes a few minutes, and you can start moving data immediately.
 
 ## Overview
 
@@ -25,7 +25,7 @@ This quickstart shows you how to:
 
 If you don't want to self-manage Airbyte, skip this guide. Sign up for an [Airbyte Cloud](https://cloud.airbyte.com/signup) trial and [start syncing data](add-a-source.md) now.
 
-If you want to use Python to move data, Airbyte's Python library, [PyAirbyte](../pyairbyte/getting-started.mdx), might be the best fit for you. It's a good choice if you're using Jupyter Notebook or iterating on an early prototype for a large data project and don't need to run your own server.
+If you want to use Python to move data, Airbyte's Python library, [PyAirbyte](/developers/pyairbyte), might be the best fit for you. It's a good choice if you're using Jupyter Notebook or iterating on an early prototype for a large data project and don't need to run your own server.
 
 ## Suggested resources {#suggested-resources}
 
@@ -106,22 +106,22 @@ Use [Homebrew](https://brew.sh/) to install abctl.
 
     <a class="abctl-download button button--primary" data-architecture="linux" href="https://github.com/airbytehq/abctl/releases/latest" target="_blank" download>Latest Linux Release</a>
 
-3. Extract the archive. This creates a directory named `abctl`, which contains the executable and other needed files.
+3. Extract the archive. This creates a directory named `abctl-<version>-linux-<arch>`, which contains the executable and other needed files. Replace `<version>` with the downloaded version, including the `v` prefix, and `<arch>` with `amd64` or `arm64`.
 
     ```bash
-    tar -xvzf {name-of-file-downloaded.linux-*.tar.gz}
+    tar -xvzf abctl-<version>-linux-<arch>.tar.gz
     ```
 
 4. Make the extracted executable accessible. This allows you to run `abctl` as a command.
 
     ```bash
-    chmod +x abctl/abctl
+    chmod +x abctl-<version>-linux-<arch>/abctl
     ```
 
 5. Add `abctl` to your PATH. This allows you to run `abctl` from any directory in your terminal.
 
     ```bash
-    sudo mv abctl /usr/local/bin
+    sudo mv abctl-<version>-linux-<arch>/abctl /usr/local/bin
     ```
 
 6. Verify the installation. If this command prints the installed version of abctl, you can now use it to manage a local Airbyte instance.
@@ -185,6 +185,10 @@ Use [Homebrew](https://brew.sh/) to install abctl.
     abctl local install
     ```
 
+    :::note
+    If you see the warning `Encountered an issue deploying Airbyte` with the message `Readiness probe failed: HTTP probe failed with statuscode: 503`, allow installation to continue. You may need to allocate more resources for Airbyte, but installation can complete anyway. See [Suggested resources](#suggested-resources).
+    :::
+
 3. Enter your **Email** and **Organization name**, then click **Get Started**.
 
 </TabItem>
@@ -192,13 +196,13 @@ Use [Homebrew](https://brew.sh/) to install abctl.
 
 1. Open Docker Desktop, [which you installed previously](#part-1-install-docker-desktop).
 
-2. Install Airbyte. To make Airbyte accessible outside `localhost`, specify the `--host` flag and provide a fully qualified domain name for Airbyte's host.
+2. Install Airbyte. By default, abctl creates an ingress rule that matches any host. To restrict the ingress rules to the hostnames you specify, use the `--host` flag. abctl also adds rules for `localhost` and `host.docker.internal`.
 
     ```bash
     abctl local install --host example.com
     ```
 
-    You can turn off the secure cookies requirement if you're running on an insecure/non-HTTPS connection.
+    If you're running on an insecure/non-HTTPS connection, turn off the secure cookies requirement. If you don't do this, abctl gives you the error: `Your credentials were correct, but the server failed to set a cookie. You appear to have deployed over HTTP. Make sure you have disabled secure cookies.` [Learn more about this error](/platform/deploying-airbyte/troubleshoot-deploy#make-sure-you-have-disabled-secure-cookies).
 
     ```bash
     abctl local install --host example.com --insecure-cookies
@@ -221,10 +225,6 @@ Use [Homebrew](https://brew.sh/) to install abctl.
 
 </TabItem>
 </Tabs>
-
-:::note
-If you see the warning `Encountered an issue deploying Airbyte` with the message `Readiness probe failed: HTTP probe failed with statuscode: 503`, allow installation to continue. You may need to allocate more resources for Airbyte, but installation can complete anyway. See [Suggested resources](#suggested-resources).
-:::
 
 Installation may take up to 30 minutes depending on your internet connection. When it completes, your Airbyte instance opens in your web browser at [http://localhost:8000](http://localhost:8000), or the host you specified. As long as Docker Desktop is running in the background, use Airbyte by returning to that page. If you quit Docker Desktop and want to return to Airbyte, start Docker Desktop again. Once your containers are running, you can access Airbyte normally.
 

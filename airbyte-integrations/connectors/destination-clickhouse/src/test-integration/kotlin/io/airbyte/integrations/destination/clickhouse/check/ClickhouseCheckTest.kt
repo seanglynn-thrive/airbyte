@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.clickhouse.check
@@ -27,12 +27,14 @@ class ClickhouseCheckTest :
                     Files.readString(getConfigPath("non_valid_credentials_connection.json")),
                     name = "Non valid username and password",
                 ) to
-                    "Authentication failed: password is incorrect, or there is no user with such name".toPattern(),
+                    "Authentication failed: password is incorrect, or there is no user with such name"
+                        .toPattern(),
                 CheckTestConfig(
                     Files.readString(getConfigPath("non_valid_connection_host.json")),
                     name = "Non valid username and password",
                 ) to
-                    "Could not connect with provided configuration. Error: Failed to connect".toPattern(),
+                    "Could not connect with provided configuration. Error: Failed to connect"
+                        .toPattern(),
             ),
         configUpdater = ClickhouseConfigUpdater(),
     ) {

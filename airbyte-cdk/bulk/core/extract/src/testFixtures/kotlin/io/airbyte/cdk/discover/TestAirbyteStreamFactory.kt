@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.discover
@@ -20,7 +20,7 @@ class TestAirbyteStreamFactory(
 
     override fun create(
         config: SourceConfiguration,
-        discoveredStream: DiscoveredStream
+        discoveredStream: DiscoveredStream,
     ): AirbyteStream =
         AirbyteStreamFactory.createAirbyteStream(discoveredStream).apply {
             val hasPK = discoveredStream.primaryKeyColumnIDs.isNotEmpty()

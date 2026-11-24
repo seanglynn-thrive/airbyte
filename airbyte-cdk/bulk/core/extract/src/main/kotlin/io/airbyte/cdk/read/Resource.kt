@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.read
@@ -37,12 +37,12 @@ class ResourceAcquirer(val acquierers: List<Resource<*>>) {
     @Inject
     constructor(
         cr: ConcurrencyResource,
-        sr: SocketResource
+        sr: SocketResource,
     ) : this(
         listOf(
             cr,
             sr,
-        )
+        ),
     )
 
     fun tryAcquire(requested: List<ResourceType>): Map<ResourceType, Resource.Acquired>? {

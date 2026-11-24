@@ -1,4 +1,4 @@
-/* Copyright (c) 2024 Airbyte, Inc., all rights reserved. */
+/* Copyright (c) 2026 Airbyte, Inc., all rights reserved. */
 package io.airbyte.cdk.jdbc
 
 import java.io.ByteArrayInputStream
@@ -321,7 +321,7 @@ data object TimeAccessor : JdbcAccessor<LocalTime> {
     override fun get(
         rs: ResultSet,
         colIdx: Int,
-    ): LocalTime? = rs.getTime(colIdx)?.takeUnless { rs.wasNull() }?.toLocalTime()
+    ): LocalTime? = rs.getObject(colIdx, LocalTime::class.java)?.takeUnless { rs.wasNull() }
 
     override fun set(
         stmt: PreparedStatement,
@@ -416,6 +416,9 @@ data class AnySetter(
 data class ArrayGetter<T>(
     val elementGetter: JdbcGetter<T>,
 ) : JdbcGetter<List<T>> {
+    // TODO: Allow partial success.
+    //  Catch exceptions for individual values and replace with null.
+    //  This requires returning both a list of values and a list of exceptions.
     override fun get(
         rs: ResultSet,
         colIdx: Int,
@@ -426,7 +429,7 @@ data class ArrayGetter<T>(
             ?.use { rsInner: ResultSet ->
                 mutableListOf<T>().apply {
                     while (rsInner.next()) {
-                        addLast(elementGetter.get(rsInner, 2))
+                        @Suppress("UNCHECKED_CAST") add(elementGetter.get(rsInner, 2) as T)
                     }
                 }
             }
@@ -468,7 +471,7 @@ data class SapHanaArrayGetter<T>(
                         is Date -> dateValue.toLocalDate()
                         else ->
                             throw IllegalArgumentException(
-                                "Cannot convert ${dateValue?.javaClass} to LocalDate"
+                                "Cannot convert ${dateValue?.javaClass} to LocalDate",
                             )
                     }
                 } as List<T>
@@ -479,7 +482,7 @@ data class SapHanaArrayGetter<T>(
                         is Time -> dateValue.toLocalTime()
                         else ->
                             throw IllegalArgumentException(
-                                "Cannot convert ${dateValue?.javaClass} to LocalTime"
+                                "Cannot convert ${dateValue?.javaClass} to LocalTime",
                             )
                     }
                 } as List<T>
@@ -490,7 +493,7 @@ data class SapHanaArrayGetter<T>(
                         is Timestamp -> dateValue.toLocalDateTime()
                         else ->
                             throw IllegalArgumentException(
-                                "Cannot convert ${dateValue?.javaClass} to LocalDateTime"
+                                "Cannot convert ${dateValue?.javaClass} to LocalDateTime",
                             )
                     }
                 } as List<T>
@@ -499,7 +502,7 @@ data class SapHanaArrayGetter<T>(
                 array.map { value ->
                     targetClass.cast(value)
                         ?: throw IllegalArgumentException(
-                            "Cannot convert ${value?.javaClass} to ${targetClass.simpleName}"
+                            "Cannot convert ${value?.javaClass} to ${targetClass.simpleName}",
                         )
                 }
         }

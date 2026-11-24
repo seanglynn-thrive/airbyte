@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.mssql.v2
@@ -10,7 +10,10 @@ import io.airbyte.cdk.load.check.CheckTestConfig
 import io.airbyte.integrations.destination.mssql.v2.config.MSSQLSpecification
 import java.nio.file.Files
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Disabled
 
+// Re-enable once we fix our Azure account
+@Disabled("Our Azure creds are not functioning right now")
 internal class MSSQLCheckTest :
     CheckIntegrationTest<MSSQLSpecification>(
         successConfigFilenames =
@@ -21,13 +24,13 @@ internal class MSSQLCheckTest :
                 ),
                 CheckTestConfig(
                     Files.readString(
-                        MSSQLTestConfigUtil.getConfigPath("check/valid-ssl-trust.json")
+                        MSSQLTestConfigUtil.getConfigPath("check/valid-ssl-trust.json"),
                     ),
                     name = "SSL Thrust should work for OSS",
                 ),
                 CheckTestConfig(
                     Files.readString(
-                        MSSQLTestConfigUtil.getConfigPath("check/valid-ssl-trust.json")
+                        MSSQLTestConfigUtil.getConfigPath("check/valid-ssl-trust.json"),
                     ),
                     setOf(FeatureFlag.AIRBYTE_CLOUD_DEPLOYMENT),
                     name = "SSL Thrust should work for Cloud",
@@ -38,16 +41,16 @@ internal class MSSQLCheckTest :
                 CheckTestConfig(
                     Files.readString(MSSQLTestConfigUtil.getConfigPath("check/valid.json")),
                     setOf(FeatureFlag.AIRBYTE_CLOUD_DEPLOYMENT),
-                    name = "Unencrypted is not supported in Cloud"
+                    name = "Unencrypted is not supported in Cloud",
                 ) to "Airbyte Cloud requires SSL encryption".toPattern(),
                 CheckTestConfig(
                     Files.readString(
-                        MSSQLTestConfigUtil.getConfigPath("check/fail-database-invalid.json")
+                        MSSQLTestConfigUtil.getConfigPath("check/fail-database-invalid.json"),
                     ),
                     name = "Invalid database name",
                 ) to "Login failed for user 'sa'".toPattern(),
             ),
-        configUpdater = MSSQLConfigUpdater()
+        configUpdater = MSSQLConfigUpdater(),
     ) {
 
     companion object {

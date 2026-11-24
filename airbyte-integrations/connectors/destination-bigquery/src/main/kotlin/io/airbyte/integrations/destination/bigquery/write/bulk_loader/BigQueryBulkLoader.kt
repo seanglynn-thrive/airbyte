@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.bigquery.write.bulk_loader
@@ -8,6 +8,7 @@ import com.google.cloud.bigquery.*
 import com.google.cloud.bigquery.BigQuery
 import com.google.cloud.bigquery.JobInfo
 import com.google.cloud.bigquery.LoadJobConfiguration
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
 import io.airbyte.cdk.load.command.DestinationCatalog
 import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.config.DataChannelMedium
@@ -22,23 +23,36 @@ import io.airbyte.cdk.load.write.db.BulkLoader
 import io.airbyte.cdk.load.write.db.BulkLoaderFactory
 import io.airbyte.integrations.destination.bigquery.BigQueryConsts
 import io.airbyte.integrations.destination.bigquery.BigQueryUtils
+import io.airbyte.integrations.destination.bigquery.copy.BigqueryCopyContext
+import io.airbyte.integrations.destination.bigquery.copy.BigqueryS3Copy
+import io.airbyte.integrations.destination.bigquery.copy.DisabledBigqueryS3Copy
 import io.airbyte.integrations.destination.bigquery.formatter.BigQueryRecordFormatter
 import io.airbyte.integrations.destination.bigquery.spec.BigqueryConfiguration
 import io.airbyte.integrations.destination.bigquery.spec.GcsFilePostProcessing
 import io.airbyte.integrations.destination.bigquery.spec.GcsStagingConfiguration
+import io.airbyte.integrations.destination.bigquery.toPrettyString
 import io.airbyte.integrations.destination.bigquery.write.typing_deduping.toTableId
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micronaut.context.annotation.Requires
 import io.micronaut.context.condition.Condition
 import io.micronaut.context.condition.ConditionContext
 import jakarta.inject.Named
 import jakarta.inject.Singleton
 
+private val logger = KotlinLogging.logger {}
+
+@SuppressFBWarnings(
+    value = ["NP_NONNULL_PARAM_VIOLATION"],
+    justification = "Kotlin coroutine resume stubs pass null placeholders for saved arguments",
+)
 class BigQueryBulkLoader(
     private val storageClient: GcsClient,
     private val bigQueryClient: BigQuery,
     private val bigQueryConfiguration: BigqueryConfiguration,
     private val tableId: TableId,
     private val schema: Schema,
+    private val archive: BigqueryS3Copy = DisabledBigqueryS3Copy,
+    private val copyContext: BigqueryCopyContext? = null,
 ) : BulkLoader<GcsBlob> {
     override suspend fun load(remoteObject: GcsBlob) {
         val gcsUri = "gs://${remoteObject.storageConfig.gcsBucketName}/${remoteObject.key}"
@@ -62,15 +76,37 @@ class BigQueryBulkLoader(
                 .setNullMarker(BigQueryConsts.NULL_MARKER)
                 .build()
 
-        val loadJob = bigQueryClient.create(JobInfo.of(configuration))
+        val jobId =
+            JobId.newBuilder()
+                .setProject(bigQueryConfiguration.jobProjectId)
+                .setLocation(bigQueryConfiguration.datasetLocation.region)
+                .setRandomJob()
+                .build()
+        val loadJob = bigQueryClient.create(JobInfo.of(jobId, configuration))
 
         try {
             BigQueryUtils.waitForJobFinish(loadJob)
         } catch (e: Exception) {
             throw RuntimeException(
-                "Failed to load CSV data from $gcsUri to table ${tableId.dataset}.${tableId.table}",
-                e
+                "Failed to load CSV data from $gcsUri to table ${tableId.toPrettyString()}",
+                e,
             )
+        }
+
+        val stats = loadJob.reload().getStatistics<JobStatistics.LoadStatistics>()
+        logger.info {
+            "Finished loading data into table ${tableId.toPrettyString()}. ${stats.outputRows} rows loaded; ${stats.badRecords} bad records."
+        }
+        if (stats.badRecords > 0) {
+            // This should be impossible: the load job uses the default setting of maxBadRecords=0,
+            // so the job is supposed to fail if there were any bad records.
+            throw RuntimeException(
+                "${tableId.toPrettyString()}: Nonzero bad records detected: ${stats.badRecords}",
+            )
+        }
+
+        copyContext?.let {
+            archive.copyCompletedGcsObject(storageClient, remoteObject, it, stats.outputRows)
         }
 
         val loadingMethodPostProcessing =
@@ -103,6 +139,7 @@ class BigQueryBulkLoaderFactory(
     private val typingDedupingStreamStateStore: StreamStateStore<TypingDedupingExecutionConfig>?,
     private val directLoadStreamStateStore: StreamStateStore<DirectLoadTableExecutionConfig>?,
     @Named("dataChannelMedium") private val dataChannelMedium: DataChannelMedium,
+    private val archive: BigqueryS3Copy,
 ) : BulkLoaderFactory<StreamKey, GcsBlob> {
     override val numPartWorkers: Int = 2
     override val numUploadWorkers: Int = 10
@@ -143,12 +180,14 @@ class BigQueryBulkLoaderFactory(
             bigQueryConfiguration,
             tableId,
             schema,
+            archive,
+            archive.context(catalog.getStream(key.stream)),
         )
     }
 
     private fun <S> waitForStateStore(
         stateStore: StreamStateStore<S>,
-        streamDescriptor: DestinationStream.Descriptor
+        streamDescriptor: DestinationStream.Descriptor,
     ): S {
         // Poll the state store until it's populated by the coordinating StreamLoader thread
         var attempts = 0

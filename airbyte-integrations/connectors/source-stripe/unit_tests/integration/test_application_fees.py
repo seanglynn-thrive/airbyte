@@ -54,7 +54,13 @@ def _events_request() -> StripeRequestBuilder:
 
 
 def _config() -> ConfigBuilder:
-    return ConfigBuilder().with_start_date(_NOW - timedelta(days=75)).with_account_id(_ACCOUNT_ID).with_client_secret(_CLIENT_SECRET)
+    return (
+        ConfigBuilder()
+        .with_start_date(_NOW - timedelta(days=75))
+        .with_account_id(_ACCOUNT_ID)
+        .with_client_secret(_CLIENT_SECRET)
+        .with_slice_range_in_days(365)
+    )
 
 
 def _catalog(sync_mode: SyncMode) -> ConfiguredAirbyteCatalog:
@@ -184,6 +190,16 @@ class FullRefreshTest(TestCase):
         )
         output = self._read(_config())
         assert_stream_did_not_run(output, _STREAM_NAME, "Your account is not set up to use Issuing")
+
+    @HttpMocker()
+    def test_given_http_status_404_when_read_then_stream_did_not_run(self, http_mocker: HttpMocker) -> None:
+        http_mocker.get(
+            _application_fees_request().with_any_query_params().build(),
+            a_response_with_status(404),
+        )
+        output = self._read(_config())
+        assert_stream_did_not_run(output, _STREAM_NAME, "Data was not found. Error message: No such application fee")
+        assert output.errors == []
 
     @HttpMocker()
     def test_given_http_status_401_when_read_then_config_error(self, http_mocker: HttpMocker) -> None:

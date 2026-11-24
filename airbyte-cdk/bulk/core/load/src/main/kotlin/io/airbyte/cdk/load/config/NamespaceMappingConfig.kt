@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.config
@@ -24,5 +24,5 @@ enum class NamespaceDefinitionType(@JsonValue val value: String) {
 data class NamespaceMappingConfig(
     val namespaceDefinitionType: NamespaceDefinitionType,
     val namespaceFormat: String? = null,
-    val streamPrefix: String? = null
+    val streamPrefix: String? = null,
 )

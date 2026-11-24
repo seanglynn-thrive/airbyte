@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.source.datagen.partitions
@@ -33,7 +33,7 @@ class DataGenSourcePartitionsCreatorFactory(val partitionFactory: DataGenSourceP
 
 @Singleton
 class DataGenSourcePartitionsCreatorFactorySupplier(
-    val factory: DataGenSourcePartitionsCreatorFactory
+    val factory: DataGenSourcePartitionsCreatorFactory,
 ) : PartitionsCreatorFactorySupplier<DataGenSourcePartitionsCreatorFactory> {
     override fun get() = factory
 }

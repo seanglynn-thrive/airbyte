@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.azure_blob_storage
@@ -9,7 +9,7 @@ import io.airbyte.cdk.load.file.azureBlobStorage.AzureBlob
 import io.airbyte.cdk.load.write.DestinationWriter
 import io.airbyte.cdk.load.write.StreamLoader
 import io.airbyte.cdk.load.write.object_storage.ObjectStorageStreamLoaderFactory
-import javax.inject.Singleton
+import jakarta.inject.Singleton
 
 @Singleton
 class AzureBlobStorageWriter(

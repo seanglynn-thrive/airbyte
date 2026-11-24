@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.test.fixtures.legacy
@@ -15,18 +15,9 @@ import java.io.Serializable
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder("status", "message")
 class StandardCheckConnectionOutput : Serializable {
-    /**
-     *
-     * (Required)
-     */
-    /**
-     *
-     * (Required)
-     */
-    /**
-     *
-     * (Required)
-     */
+    /** (Required) */
+    /** (Required) */
+    /** (Required) */
     @get:JsonProperty("status")
     @set:JsonProperty("status")
     @JsonProperty("status")

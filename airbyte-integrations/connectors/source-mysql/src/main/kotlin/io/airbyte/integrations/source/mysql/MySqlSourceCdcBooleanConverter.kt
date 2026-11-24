@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.source.mysql
@@ -29,7 +29,7 @@ class MySqlSourceCdcBooleanConverter : RelationalColumnCustomConverter {
         override val partialConverters: List<PartialConverter> =
             listOf(
                 NullFallThrough,
-                PartialConverter { if (it is Number) Converted(it != 0) else NoConversion }
+                PartialConverter { if (it is Number) Converted(it != 0) else NoConversion },
             )
     }
 }

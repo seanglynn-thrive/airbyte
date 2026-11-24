@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.bigquery.formatter
@@ -7,6 +7,7 @@ package io.airbyte.integrations.destination.bigquery.formatter
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.google.protobuf.kotlin.toByteString
+import io.airbyte.cdk.data.LeafAirbyteSchemaType
 import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.command.computeUnknownColumnChanges
 import io.airbyte.cdk.load.data.AirbyteValueProxy
@@ -29,6 +30,7 @@ import io.airbyte.cdk.load.message.DestinationRecordRaw
 import io.airbyte.cdk.load.message.DestinationRecordSource
 import io.airbyte.cdk.load.orchestration.db.ColumnNameMapping
 import io.airbyte.cdk.load.util.deserializeToNode
+import io.airbyte.cdk.protocol.AirbyteValueProtobufEncoder
 import io.airbyte.protocol.models.Jsons
 import io.airbyte.protocol.protobuf.AirbyteMessage
 import io.airbyte.protocol.protobuf.AirbyteRecordMessage
@@ -38,6 +40,11 @@ import io.mockk.junit5.MockKExtension
 import io.mockk.mockk
 import io.mockk.unmockkAll
 import java.math.BigInteger
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.OffsetTime
 import java.util.UUID
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
@@ -72,13 +79,15 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 "array_col" to "array_col",
                 "obj_col" to "obj_col",
                 "union_col" to "union_col",
-                "unknown_col" to "unknown_col"
-            )
+                "unknown_col" to "unknown_col",
+            ),
         )
     private lateinit var formatter: ProtoToBigQueryStandardInsertRecordFormatter
+    private lateinit var encoder: AirbyteValueProtobufEncoder
 
     @BeforeEach
     fun setUp() {
+        encoder = AirbyteValueProtobufEncoder()
         val fields =
             mutableListOf(
                 field("bool_col", BooleanType, 0),
@@ -110,35 +119,31 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
 
         val protoValues =
             mutableListOf(
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setBoolean(true).build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setInteger(123).build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setNumber(12.34).build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setString("hello").build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setDate("2025-06-17")
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithTimezone("23:59:59+02:00")
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithoutTimezone("23:59:59")
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithTimezone("2025-06-17T23:59:59+02:00")
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithoutTimezone("2025-06-17T23:59:59")
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setJson("""["a","b"]""".toByteArray().toByteString())
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setJson("""{"k":"v"}""".toByteArray().toByteString())
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setJson("""{"u":1}""".toByteArray().toByteString())
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setIsNull(true).build(),
+                encoder.encode(true, LeafAirbyteSchemaType.BOOLEAN),
+                encoder.encode(123L, LeafAirbyteSchemaType.INTEGER),
+                encoder.encode(12.34, LeafAirbyteSchemaType.NUMBER),
+                encoder.encode("hello", LeafAirbyteSchemaType.STRING),
+                encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE),
+                encoder.encode(
+                    OffsetTime.parse("23:59:59+02:00"),
+                    LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
+                ),
+                encoder.encode(
+                    LocalTime.parse("23:59:59"),
+                    LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
+                ),
+                encoder.encode(
+                    OffsetDateTime.parse("2025-06-17T23:59:59+02:00"),
+                    LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE,
+                ),
+                encoder.encode(
+                    LocalDateTime.parse("2025-06-17T23:59:59"),
+                    LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
+                ),
+                encoder.encode("""["a","b"]""".toByteArray(), LeafAirbyteSchemaType.JSONB),
+                encoder.encode("""{"k":"v"}""".toByteArray(), LeafAirbyteSchemaType.JSONB),
+                encoder.encode("""{"u":1}""".toByteArray(), LeafAirbyteSchemaType.JSONB),
+                encoder.encode(null, LeafAirbyteSchemaType.STRING),
             )
 
         val metaProto =
@@ -147,33 +152,33 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMetaChange.newBuilder()
                         .setField("x")
                         .setChange(
-                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED
+                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED,
                         )
                         .setReason(
                             AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType
-                                .DESTINATION_SERIALIZATION_ERROR
+                                .DESTINATION_SERIALIZATION_ERROR,
                         ),
                 )
                 .addChanges(
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMetaChange.newBuilder()
                         .setField("y")
                         .setChange(
-                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED
+                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.NULLED,
                         )
                         .setReason(
                             AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType
-                                .SOURCE_SERIALIZATION_ERROR
+                                .SOURCE_SERIALIZATION_ERROR,
                         ),
                 )
                 .addChanges(
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMetaChange.newBuilder()
                         .setField("z")
                         .setChange(
-                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.TRUNCATED
+                            AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeType.TRUNCATED,
                         )
                         .setReason(
                             AirbyteRecordMessageMetaOuterClass.AirbyteRecordChangeReasonType
-                                .SOURCE_RECORD_SIZE_LIMITATION
+                                .SOURCE_RECORD_SIZE_LIMITATION,
                         ),
                 )
                 .build()
@@ -182,7 +187,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
             AirbyteRecordMessage.AirbyteRecordMessageProtobuf.newBuilder()
                 .setStreamName("dummy")
                 .setEmittedAtMs(emittedAtMs)
-                .addAllData(protoValues)
+                .addAllData(protoValues.map { it.build() })
                 .setMeta(metaProto)
                 .build()
 
@@ -207,7 +212,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                     "obj_col" to
                         FieldType(
                             ObjectType(linkedMapOf("k" to FieldType(StringType, false))),
-                            false
+                            false,
                         ),
                     "union_col" to
                         FieldType(
@@ -220,7 +225,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                             ),
                             false,
                         ),
-                    "unknown_col" to FieldType(UnknownType(Jsons.emptyObject()), false)
+                    "unknown_col" to FieldType(UnknownType(Jsons.emptyObject()), false),
                 ),
             )
 
@@ -322,43 +327,43 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
         val nullProtoValues =
             mutableListOf(
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // bool_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // int_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // num_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // string_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // date_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // time_tz_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // time_no_tz_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // ts_tz_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // ts_no_tz_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // array_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // obj_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // union_col
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setIsNull(true)
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
                     .build(), // unknown_col
             )
 
@@ -401,20 +406,30 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                     .build(), // Oversized int
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setNumber(12.34).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setString("hello").build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setDate("2025-06-17")
+                encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE).build(),
+                encoder
+                    .encode(
+                        OffsetTime.parse("23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithTimezone("23:59:59+02:00")
+                encoder
+                    .encode(
+                        LocalTime.parse("23:59:59"),
+                        LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithoutTimezone("23:59:59")
+                encoder
+                    .encode(
+                        OffsetDateTime.parse("2025-06-17T23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithTimezone("2025-06-17T23:59:59+02:00")
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithoutTimezone("2025-06-17T23:59:59")
+                encoder
+                    .encode(
+                        LocalDateTime.parse("2025-06-17T23:59:59"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
+                    )
                     .build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""["a","b"]""".toByteArray().toByteString())
@@ -425,7 +440,9 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""{"u":1}""".toByteArray().toByteString())
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setIsNull(true).build(),
+                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
+                    .build(),
             )
 
         val oversizedRecord = buildModifiedRecord(oversizedProtoValues)
@@ -461,20 +478,34 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setInteger(123).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setNumber(12.34).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setString("hello").build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setDate("2025-06-17")
+                encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE).build(),
+                encoder
+                    .encode(
+                        OffsetTime.parse("23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithTimezone("23:59:59+02:00")
+                encoder
+                    .encode(
+                        LocalTime.parse("23:59:59"),
+                        LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
+                    )
                     .build(),
+                // Invalid timestamp
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithoutTimezone("23:59:59")
+                    .setTimestampWithTimezone(
+                        AirbyteRecordMessage.OffsetDateTime.newBuilder()
+                            .setEpochSecond(-999999999999L)
+                            .setNano(-1)
+                            .setOffsetSeconds(0)
+                            .build(),
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithTimezone("invalid-timestamp")
-                    .build(), // Invalid timestamp
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithoutTimezone("2025-06-17T23:59:59")
+                encoder
+                    .encode(
+                        LocalDateTime.parse("2025-06-17T23:59:59"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
+                    )
                     .build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""["a","b"]""".toByteArray().toByteString())
@@ -485,7 +516,9 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""{"u":1}""".toByteArray().toByteString())
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setIsNull(true).build(),
+                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
+                    .build(),
             )
 
         val invalidRecord = buildModifiedRecord(invalidTimestampProtoValues)
@@ -510,7 +543,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 as ObjectNode
 
         assertEquals("NULLED", timestampChange.get("change").asText())
-        assertEquals("DESTINATION_SERIALIZATION_ERROR", timestampChange.get("reason").asText())
+        assertEquals("DESTINATION_FIELD_SIZE_LIMITATION", timestampChange.get("reason").asText())
     }
 
     @Test
@@ -524,8 +557,8 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
             assertThrows(IllegalArgumentException::class.java) { formatter.formatRecord(nonProto) }
         assertTrue(
             ex.message!!.contains(
-                "ProtoToBigQueryRecordFormatter only supports DestinationRecordProtobufSource"
-            )
+                "ProtoToBigQueryRecordFormatter only supports DestinationRecordProtobufSource",
+            ),
         )
     }
 
@@ -559,20 +592,30 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setInteger(123).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setNumber(12.34).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setString("hello").build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setDate("2025-06-17")
+                encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE).build(),
+                encoder
+                    .encode(
+                        OffsetTime.parse("23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithTimezone("23:59:59+02:00")
+                encoder
+                    .encode(
+                        LocalTime.parse("23:59:59"),
+                        LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithoutTimezone("23:59:59")
+                encoder
+                    .encode(
+                        OffsetDateTime.parse("2025-06-17T23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithTimezone("2025-06-17T23:59:59+02:00")
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithoutTimezone("2025-06-17T23:59:59")
+                encoder
+                    .encode(
+                        LocalDateTime.parse("2025-06-17T23:59:59"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
+                    )
                     .build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""[]""".toByteArray().toByteString()) // Empty array
@@ -583,7 +626,9 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""{"u":1}""".toByteArray().toByteString())
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setIsNull(true).build(),
+                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
+                    .build(),
             )
 
         val emptyComplexRecord = buildModifiedRecord(emptyComplexTypesProtoValues)
@@ -609,20 +654,33 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setInteger(123).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setNumber(12.34).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setString("hello").build(),
+                // Invalid date
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setDate("invalid-date") // Invalid date format
+                    .setDate(Integer.MAX_VALUE.toLong())
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithTimezone("23:59:59+02:00")
+                encoder
+                    .encode(
+                        OffsetTime.parse("23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithoutTimezone("23:59:59")
+                encoder
+                    .encode(
+                        LocalTime.parse("23:59:59"),
+                        LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithTimezone("2025-06-17T23:59:59+02:00")
+                encoder
+                    .encode(
+                        OffsetDateTime.parse("2025-06-17T23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithoutTimezone("2025-06-17T23:59:59")
+                encoder
+                    .encode(
+                        LocalDateTime.parse("2025-06-17T23:59:59"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
+                    )
                     .build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""["a","b"]""".toByteArray().toByteString())
@@ -633,7 +691,9 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""{"u":1}""".toByteArray().toByteString())
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setIsNull(true).build(),
+                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
+                    .build(),
             )
 
         val invalidDateRecord = buildModifiedRecord(invalidDateProtoValues)
@@ -658,7 +718,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 as ObjectNode
 
         assertEquals("NULLED", dateChange.get("change").asText())
-        assertEquals("DESTINATION_SERIALIZATION_ERROR", dateChange.get("reason").asText())
+        assertEquals("DESTINATION_FIELD_SIZE_LIMITATION", dateChange.get("reason").asText())
     }
 
     @Test
@@ -669,7 +729,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 fieldAccessors,
                 columnNameMapping,
                 stream,
-                legacyRawTablesOnly = true
+                legacyRawTablesOnly = true,
             )
 
         val jsonResult = legacyFormatter.formatRecord(record)
@@ -727,7 +787,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 fieldAccessors,
                 columnNameMapping,
                 stream,
-                legacyRawTablesOnly = true
+                legacyRawTablesOnly = true,
             )
 
         val bigInteger = BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE)
@@ -739,20 +799,30 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                     .build(), // Oversized int
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setNumber(12.34).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setString("hello").build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setDate("2025-06-17")
+                encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE).build(),
+                encoder
+                    .encode(
+                        OffsetTime.parse("23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithTimezone("23:59:59+02:00")
+                encoder
+                    .encode(
+                        LocalTime.parse("23:59:59"),
+                        LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithoutTimezone("23:59:59")
+                encoder
+                    .encode(
+                        OffsetDateTime.parse("2025-06-17T23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithTimezone("2025-06-17T23:59:59+02:00")
-                    .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithoutTimezone("2025-06-17T23:59:59")
+                encoder
+                    .encode(
+                        LocalDateTime.parse("2025-06-17T23:59:59"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
+                    )
                     .build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""["a","b"]""".toByteArray().toByteString())
@@ -763,7 +833,9 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""{"u":1}""".toByteArray().toByteString())
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setIsNull(true).build(),
+                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
+                    .build(),
             )
 
         val oversizedRecord = buildModifiedRecord(oversizedProtoValues)
@@ -804,7 +876,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 fieldAccessors,
                 columnNameMapping,
                 stream,
-                legacyRawTablesOnly = true
+                legacyRawTablesOnly = true,
             )
 
         val invalidTimestampProtoValues =
@@ -813,20 +885,34 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setInteger(123).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setNumber(12.34).build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setString("hello").build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setDate("2025-06-17")
+                encoder.encode(LocalDate.parse("2025-06-17"), LeafAirbyteSchemaType.DATE).build(),
+                encoder
+                    .encode(
+                        OffsetTime.parse("23:59:59+02:00"),
+                        LeafAirbyteSchemaType.TIME_WITH_TIMEZONE,
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithTimezone("23:59:59+02:00")
+                encoder
+                    .encode(
+                        LocalTime.parse("23:59:59"),
+                        LeafAirbyteSchemaType.TIME_WITHOUT_TIMEZONE,
+                    )
                     .build(),
+                // Invalid timestamp
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimeWithoutTimezone("23:59:59")
+                    .setTimestampWithTimezone(
+                        AirbyteRecordMessage.OffsetDateTime.newBuilder()
+                            .setEpochSecond(-999999999999L)
+                            .setNano(-1)
+                            .setOffsetSeconds(0)
+                            .build(),
+                    )
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithTimezone("invalid-timestamp")
-                    .build(), // Invalid timestamp
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
-                    .setTimestampWithoutTimezone("2025-06-17T23:59:59")
+                encoder
+                    .encode(
+                        LocalDateTime.parse("2025-06-17T23:59:59"),
+                        LeafAirbyteSchemaType.TIMESTAMP_WITHOUT_TIMEZONE,
+                    )
                     .build(),
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""["a","b"]""".toByteArray().toByteString())
@@ -837,7 +923,9 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
                     .setJson("""{"u":1}""".toByteArray().toByteString())
                     .build(),
-                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder().setIsNull(true).build(),
+                AirbyteRecordMessage.AirbyteValueProtobuf.newBuilder()
+                    .setNull(com.google.protobuf.NullValue.NULL_VALUE)
+                    .build(),
             )
 
         val invalidRecord = buildModifiedRecord(invalidTimestampProtoValues)
@@ -868,7 +956,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 as ObjectNode
 
         assertEquals("NULLED", timestampChange.get("change").asText())
-        assertEquals("DESTINATION_SERIALIZATION_ERROR", timestampChange.get("reason").asText())
+        assertEquals("DESTINATION_FIELD_SIZE_LIMITATION", timestampChange.get("reason").asText())
     }
 
     @Test
@@ -878,7 +966,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 fieldAccessors,
                 columnNameMapping,
                 stream,
-                legacyRawTablesOnly = true
+                legacyRawTablesOnly = true,
             )
 
         val directFormatter =
@@ -886,7 +974,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
                 fieldAccessors,
                 columnNameMapping,
                 stream,
-                legacyRawTablesOnly = false
+                legacyRawTablesOnly = false,
             )
 
         val legacyResult = legacyFormatter.formatRecord(record).deserializeToNode() as ObjectNode
@@ -909,11 +997,11 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
         // Both should have the same metadata fields
         assertEquals(
             legacyResult.get("_airbyte_raw_id").asText(),
-            directResult.get("_airbyte_raw_id").asText()
+            directResult.get("_airbyte_raw_id").asText(),
         )
         assertEquals(
             legacyResult.get("_airbyte_generation_id").asLong(),
-            directResult.get("_airbyte_generation_id").asLong()
+            directResult.get("_airbyte_generation_id").asLong(),
         )
 
         // Meta fields should have the same number of changes
@@ -927,7 +1015,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
     }
 
     private fun buildModifiedRecord(
-        protoValues: List<AirbyteRecordMessage.AirbyteValueProtobuf>
+        protoValues: List<AirbyteRecordMessage.AirbyteValueProtobuf>,
     ): DestinationRecordProtobufSource {
         val recordProto =
             AirbyteRecordMessage.AirbyteRecordMessageProtobuf.newBuilder()
@@ -943,7 +1031,7 @@ class ProtoToBigQueryStandardInsertRecordFormatterTest {
     private fun field(
         name: String,
         type: io.airbyte.cdk.load.data.AirbyteType,
-        idx: Int
+        idx: Int,
     ): AirbyteValueProxy.FieldAccessor = mockk {
         every { this@mockk.name } returns name
         every { this@mockk.type } returns type

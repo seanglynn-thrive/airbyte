@@ -1,4 +1,4 @@
-/* Copyright (c) 2024 Airbyte, Inc., all rights reserved. */
+/* Copyright (c) 2026 Airbyte, Inc., all rights reserved. */
 package io.airbyte.integrations.source.datagen
 
 import io.airbyte.cdk.ConfigErrorException
@@ -13,6 +13,8 @@ import io.airbyte.cdk.ssh.SshConnectionOptions
 import io.airbyte.cdk.ssh.SshTunnelMethodConfiguration
 import io.airbyte.integrations.source.datagen.flavor.Flavor
 import io.airbyte.integrations.source.datagen.flavor.increment.IncrementFlavor
+import io.airbyte.integrations.source.datagen.flavor.types.TypesFlavor
+import io.airbyte.integrations.source.datagen.flavor.wide.WideFlavor
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micronaut.context.annotation.Factory
 import io.micronaut.context.annotation.Value
@@ -35,7 +37,7 @@ data class DataGenSourceConfiguration(
     override val sshConnectionOptions: SshConnectionOptions =
         SshConnectionOptions.fromAdditionalProperties(emptyMap()),
     val flavor: Flavor,
-    val maxRecords: Long
+    val maxRecords: Long,
 ) : SourceConfiguration {
     /** Required to inject [DataGenSourceConfiguration] directly. */
     @Factory
@@ -44,7 +46,9 @@ data class DataGenSourceConfiguration(
         fun dataGenSourceConfig(
             factory:
                 SourceConfigurationFactory<
-                    DataGenSourceConfigurationSpecification, DataGenSourceConfiguration>,
+                    DataGenSourceConfigurationSpecification,
+                    DataGenSourceConfiguration,
+                >,
             supplier: ConfigurationSpecificationSupplier<DataGenSourceConfigurationSpecification>,
         ): DataGenSourceConfiguration = factory.make(supplier.get())
     }
@@ -56,15 +60,17 @@ class DataGenSourceConfigurationFactory
 constructor(
     @Value("\${${DATA_CHANNEL_PROPERTY_PREFIX}.medium}") val dataChannelMedium: String = STDIO.name,
     @Value("\${${DATA_CHANNEL_PROPERTY_PREFIX}.socket-paths}")
-    val socketPaths: List<String> = emptyList()
+    val socketPaths: List<String> = emptyList(),
 ) :
     SourceConfigurationFactory<
-        DataGenSourceConfigurationSpecification, DataGenSourceConfiguration> {
+        DataGenSourceConfigurationSpecification,
+        DataGenSourceConfiguration,
+    > {
 
     private val log = KotlinLogging.logger {}
 
     override fun makeWithoutExceptionHandling(
-        pojo: DataGenSourceConfigurationSpecification
+        pojo: DataGenSourceConfigurationSpecification,
     ): DataGenSourceConfiguration {
         if ((pojo.concurrency ?: 1) <= 0) {
             throw ConfigErrorException("Concurrency setting should be positive")
@@ -79,12 +85,18 @@ constructor(
             }
         log.info { "Effective concurrency: $maxConcurrency" }
 
-        // TODO: use factory method to select and instantiate flavor
+        val flavorSpec = pojo.getFlavor()
+        val flavor: Flavor =
+            when (flavorSpec) {
+                Incremental -> IncrementFlavor
+                Types -> TypesFlavor
+                is Wide -> WideFlavor(flavorSpec.columnCount)
+            }
 
         return DataGenSourceConfiguration(
             maxConcurrency = maxConcurrency,
-            flavor = IncrementFlavor,
-            maxRecords = pojo.maxRecords
+            flavor = flavor,
+            maxRecords = pojo.maxRecords,
         )
     }
 }

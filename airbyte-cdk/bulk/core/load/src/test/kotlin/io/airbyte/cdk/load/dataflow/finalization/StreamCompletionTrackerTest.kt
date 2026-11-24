@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.finalization
@@ -22,7 +22,7 @@ class StreamCompletionTrackerTest {
             listOf(
                 createStream("namespace1", "stream1"),
                 createStream("namespace1", "stream2"),
-                createStream("namespace2", "stream1")
+                createStream("namespace2", "stream1"),
             )
         val catalog = mockk<DestinationCatalog> { every { this@mockk.streams } returns streams }
         val tracker = StreamCompletionTracker(catalog)
@@ -47,7 +47,7 @@ class StreamCompletionTrackerTest {
             listOf(
                 createStream("namespace1", "stream1"),
                 createStream("namespace1", "stream2"),
-                createStream("namespace2", "stream1")
+                createStream("namespace2", "stream1"),
             )
         val catalog = mockk<DestinationCatalog> { every { this@mockk.streams } returns streams }
         val tracker = StreamCompletionTracker(catalog)

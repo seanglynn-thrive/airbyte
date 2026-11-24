@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.transform
@@ -7,6 +7,7 @@ package io.airbyte.cdk.load.dataflow.transform
 import io.airbyte.cdk.load.data.AirbyteType
 import io.airbyte.cdk.load.data.AirbyteValue
 import io.airbyte.cdk.load.data.EnrichedAirbyteValue
+import io.airbyte.protocol.models.v0.AirbyteRecordMessageMetaChange
 
 /**
  * Interface for destination-specific field coercion and type representation.
@@ -23,8 +24,8 @@ interface ValueCoercer {
      *
      * @param airbyteType The original Airbyte type from the schema
      * @return The target AirbyteValue class to use, or null for default behavior
-     *
      * @example
+     *
      * ```kotlin
      * override fun representAs(airbyteType: AirbyteType): Class<out AirbyteValue>? {
      *     return when (airbyteType) {
@@ -49,8 +50,8 @@ interface ValueCoercer {
      *
      * @param value The enriched Airbyte value to transform
      * @return The transformed EnrichedAirbyteValue
-     *
      * @example
+     *
      * ```kotlin
      * override fun map(value: EnrichedAirbyteValue): EnrichedAirbyteValue {
      *     return when (value.type) {
@@ -71,30 +72,43 @@ interface ValueCoercer {
      * nullify values that fail validation.
      *
      * @param value The enriched Airbyte value to validate
-     * @return The validated EnrichedAirbyteValue, potentially nullified if validation fails
-     *
+     * @return The [ValidationResult] indicating whether the value is valid or not, and if so, why
      * @example
+     *
      * ```kotlin
-     * override fun validate(value: EnrichedAirbyteValue): EnrichedAirbyteValue {
+     * override fun validate(value: EnrichedAirbyteValue): ValidationResult =
      *     when (val abValue = value.abValue) {
      *         is StringValue -> {
      *             if (abValue.value.length > MAX_STRING_LENGTH) {
-     *                 value.nullify(
-     *                     AirbyteRecordMessageMetaChange.Reason.DESTINATION_FIELD_SIZE_LIMITATION
-     *                 )
+     *               ShouldNullify(AirbyteRecordMessageMetaChange.Reason.DESTINATION_FIELD_SIZE_LIMITATION)
+     *             } else {
+     *               Valid
      *             }
      *         }
      *         is IntegerValue -> {
      *             if (abValue.value > MAX_INTEGER) {
-     *                 value.nullify(
-     *                     AirbyteRecordMessageMetaChange.Reason.DESTINATION_FIELD_SIZE_LIMITATION
-     *                 )
+     *               ShouldNullify(AirbyteRecordMessageMetaChange.Reason.DESTINATION_FIELD_SIZE_LIMITATION)
+     *             } else {
+     *               Valid
      *             }
      *         }
      *     }
-     *     return value
-     * }
      * ```
      */
-    fun validate(value: EnrichedAirbyteValue): EnrichedAirbyteValue
+    fun validate(value: EnrichedAirbyteValue): ValidationResult
+}
+
+/** Result of a value validation check via the [ValueCoercer.validate] method. */
+sealed interface ValidationResult {
+    /** Value is valid, no action needed */
+    data object Valid : ValidationResult
+
+    /** Value should be nullified with the given reason */
+    data class ShouldNullify(val reason: AirbyteRecordMessageMetaChange.Reason) : ValidationResult
+
+    /** Value should be replaced with the new, truncated value and reason */
+    data class ShouldTruncate(
+        val truncatedValue: AirbyteValue,
+        val reason: AirbyteRecordMessageMetaChange.Reason,
+    ) : ValidationResult
 }

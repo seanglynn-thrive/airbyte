@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.azure_blob_storage
@@ -24,7 +24,7 @@ abstract class AzureBlobStorageWriteTest(
     mismatchedTypesUnrepresentable: Boolean = false,
     unknownTypesBehavior: UnknownTypesBehavior = UnknownTypesBehavior.PASS_THROUGH,
     dataChannelMedium: DataChannelMedium = DataChannelMedium.STDIO,
-    dataChannelFormat: DataChannelFormat = DataChannelFormat.JSONL
+    dataChannelFormat: DataChannelFormat = DataChannelFormat.JSONL,
 ) :
     BasicFunctionalityIntegrationTest(
         configContents = configContents,
@@ -51,7 +51,7 @@ abstract class AzureBlobStorageWriteTest(
 class AzureBlobStorageCsvNoFlatteningWriteTest :
     AzureBlobStorageWriteTest(
         AzureBlobStorageTestUtil.getAccountKeyConfig(
-            CSVFormatSpecification(flattening = Flattening.NO_FLATTENING)
+            CSVFormatSpecification(flattening = Flattening.NO_FLATTENING),
         ),
     )
 
@@ -75,7 +75,7 @@ class AzureBlobStorageCsvNoFlatteningWriteTestProto :
 class AzureBlobStorageCsvWithFlatteningWriteTest :
     AzureBlobStorageWriteTest(
         AzureBlobStorageTestUtil.getAccountKeyConfig(
-            CSVFormatSpecification(flattening = Flattening.ROOT_LEVEL_FLATTENING)
+            CSVFormatSpecification(flattening = Flattening.ROOT_LEVEL_FLATTENING),
         ),
     )
 
@@ -99,7 +99,7 @@ class AzureBlobStorageCsvWithFlatteningWriteTestProto :
 class AzureBlobStorageJsonlNoFlatteningWriteTest :
     AzureBlobStorageWriteTest(
         AzureBlobStorageTestUtil.getAccountKeyConfig(
-            JsonFormatSpecification(flattening = Flattening.NO_FLATTENING)
+            JsonFormatSpecification(flattening = Flattening.NO_FLATTENING),
         ),
     )
 
@@ -123,7 +123,7 @@ class AzureBlobStorageJsonlNoFlatteningWriteTestProto :
 class AzureBlobStorageJsonlWithFlatteningWriteTest :
     AzureBlobStorageWriteTest(
         AzureBlobStorageTestUtil.getAccountKeyConfig(
-            JsonFormatSpecification(flattening = Flattening.ROOT_LEVEL_FLATTENING)
+            JsonFormatSpecification(flattening = Flattening.ROOT_LEVEL_FLATTENING),
         ),
     )
 
@@ -147,7 +147,7 @@ class AzureBlobStorageJsonlWithFlatteningWriteTestProto :
 class AzureBlobStorageSasCsvWithFlatteningWriteTest :
     AzureBlobStorageWriteTest(
         AzureBlobStorageTestUtil.getSasConfig(
-            CSVFormatSpecification(flattening = Flattening.ROOT_LEVEL_FLATTENING)
+            CSVFormatSpecification(flattening = Flattening.ROOT_LEVEL_FLATTENING),
         ),
     )
 

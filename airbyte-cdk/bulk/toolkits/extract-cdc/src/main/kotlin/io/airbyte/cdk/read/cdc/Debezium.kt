@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.read.cdc
@@ -90,7 +90,7 @@ sealed interface DebeziumWarmStartState
 
 data class ValidDebeziumWarmStartState(
     val offset: DebeziumOffset,
-    val schemaHistory: DebeziumSchemaHistory?
+    val schemaHistory: DebeziumSchemaHistory?,
 ) : DebeziumWarmStartState
 
 sealed interface InvalidDebeziumWarmStartState : DebeziumWarmStartState

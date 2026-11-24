@@ -1,12 +1,12 @@
 ---
-products: cloud, oss-enterprise
+products: cloud
 ---
 
 import DocCardList from '@theme/DocCardList';
 
 # Workspaces
 
-Each organization consists of one or more **workspaces**. A workspace groups sources, destinations, connections. You can also use workspaces to assign access and permissions. You can use a single workspace for everything, or you can divide your organization into multiple workspaces.
+Each organization consists of one or more **workspaces**. A workspace groups sources, destinations, and connections. You can also use workspaces to assign access and permissions. You can use a single workspace for everything, or you can divide your organization into multiple workspaces.
 
 ![The Connections page in a workspace](../../images/workspace-homepage.png)
 
@@ -20,10 +20,10 @@ You can use workspaces for the following purposes.
 
     - If you use Cloud, you can choose between Airbyte's managed regions.
 
-    - If you use [Enterprise Flex](../../enterprise-flex) or [Self-Managed Enterprise](../../enterprise-setup), you can also self-manage your own regions and data planes on your own infrastructure.
+    - If you use [Enterprise Flex](/platform/hybrid-deployment), you can also self-manage your own regions and data planes on your own infrastructure.
 
 - Set up notifications.
 
-If you use Self-Managed Community, you only have one workspace.
+If you use Core, you only have one workspace. If you use Cloud Standard, each organization is limited to one workspace. Plus includes two workspaces, and Pro and Enterprise Flex include more. See [Airbyte's pricing page](https://airbyte.com/pricing) to compare plans.
 
 <DocCardList />

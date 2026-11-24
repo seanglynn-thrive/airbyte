@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.bigquery.check
@@ -18,13 +18,13 @@ class BigqueryCheckCleaner : CheckCleaner<BigqueryConfiguration> {
         bq.getTable(
                 BigqueryRawTableNameGenerator(config)
                     .getTableName(stream.mappedDescriptor)
-                    .toTableId()
+                    .toTableId(),
             )
             ?.delete()
         bq.getTable(
                 BigqueryFinalTableNameGenerator(config)
                     .getTableName(stream.mappedDescriptor)
-                    .toTableId()
+                    .toTableId(),
             )
             ?.delete()
     }

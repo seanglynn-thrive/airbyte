@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.s3_v2
@@ -74,7 +74,7 @@ class S3V2ConfigurationFactory(private val destinationCatalog: DestinationCatalo
                     FILE_DEFAULT_MAX_MEMORY_RESERVED_FOR_PARTS
                 } else {
                     DEFAULT_MAX_MEMORY_RESERVED_FOR_PARTS
-                }
+                },
         )
     }
 }

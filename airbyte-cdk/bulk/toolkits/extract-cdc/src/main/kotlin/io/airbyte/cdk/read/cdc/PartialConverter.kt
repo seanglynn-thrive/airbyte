@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.read.cdc
@@ -62,7 +62,7 @@ class ConverterFactory(val customConverterClass: Class<out CustomConverter<*, *>
     /** Factory method for generating a [CustomConverter.Converter] for a [RelationalColumn]. */
     fun build(
         column: RelationalColumn,
-        partialConverters: List<PartialConverter>
+        partialConverters: List<PartialConverter>,
     ): CustomConverter.Converter {
         val noDefaultConverter = Converter(column, partialConverters, NoConversion)
         if (column.isOptional || !column.hasDefaultValue()) {

@@ -63,6 +63,10 @@ Visit the [Azure Portal](https://portal.azure.com). Go to your storage account, 
 
 We recommend creating a restricted key specifically for Airbyte access. This will allow you to control which resources Airbyte should be able to access. However, shared access key authentication is not supported by this connector yet.
 
+## IP allow list
+
+If you use Airbyte Cloud and your organization restricts access to specific IPs, add the [Airbyte Cloud IP addresses](https://docs.airbyte.com/platform/operating-airbyte/ip-allowlist) to your allow list.
+
 ## Changelog
 
 <details>
@@ -70,6 +74,8 @@ We recommend creating a restricted key specifically for Airbyte access. This wil
 
 | Version | Date       | Pull Request                                             | Subject                                           |
 | :------ | :--------- | :------------------------------------------------------- | :------------------------------------------------ |
+| 0.1.57 | 2025-10-21 | [68397](https://github.com/airbytehq/airbyte/pull/68397) | Update dependencies |
+| 0.1.56 | 2025-10-14 | [67976](https://github.com/airbytehq/airbyte/pull/67976) | Update dependencies |
 | 0.1.55 | 2025-10-07 | [67169](https://github.com/airbytehq/airbyte/pull/67169) | Update dependencies |
 | 0.1.54 | 2025-09-30 | [65653](https://github.com/airbytehq/airbyte/pull/65653) | Update dependencies |
 | 0.1.53 | 2025-08-23 | [65333](https://github.com/airbytehq/airbyte/pull/65333) | Update dependencies |

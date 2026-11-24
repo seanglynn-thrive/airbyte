@@ -2,41 +2,88 @@
 # Copyright (c) 2025 Airbyte, Inc., all rights reserved.
 #
 
-import copy
+import codecs
+import io
 import json
 import logging
 import re
-import time
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 from itertools import groupby
-from typing import Any, Callable, Dict, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
+from typing import Any, Callable, ClassVar, Dict, Generator, Iterable, List, Mapping, MutableMapping, Optional, Set, Tuple, Union
 
 import anyascii
 import requests
+from requests.adapters import HTTPAdapter
 
 from airbyte_cdk import AirbyteTracedException, FailureType, InterpolatedString
+from airbyte_cdk.sources.declarative.decoders.composite_raw_decoder import JsonParser
+from airbyte_cdk.sources.declarative.decoders.decoder import Decoder
+from airbyte_cdk.sources.declarative.extractors.dpath_extractor import DpathExtractor
 from airbyte_cdk.sources.declarative.extractors.record_extractor import RecordExtractor
 from airbyte_cdk.sources.declarative.extractors.record_filter import RecordFilter
 from airbyte_cdk.sources.declarative.migrations.state_migration import StateMigration
 from airbyte_cdk.sources.declarative.requesters.http_requester import HttpRequester
+from airbyte_cdk.sources.declarative.retrievers.request_window_splitting import RequestWindowSplitting
 from airbyte_cdk.sources.declarative.retrievers.simple_retriever import SimpleRetriever
 from airbyte_cdk.sources.declarative.schema import SchemaLoader
 from airbyte_cdk.sources.declarative.schema.inline_schema_loader import InlineSchemaLoader
 from airbyte_cdk.sources.declarative.transformations import RecordTransformation
+from airbyte_cdk.sources.streams.concurrent.cursor import Cursor
 from airbyte_cdk.sources.streams.concurrent.default_stream import DefaultStream
+from airbyte_cdk.sources.streams.http.request_window_split_exception import RequestWindowSplitRequiredException
 from airbyte_cdk.sources.types import Config, Record, StreamSlice, StreamState
 from airbyte_cdk.sources.utils.transform import TransformConfig, TypeTransformer
+
+from .google_ads import GoogleAds
 
 
 logger = logging.getLogger("airbyte")
 
+# Default socket-level timeout (in seconds) for all Google Ads API HTTP calls.
+# This is an idle timeout per recv() call, not a total request timeout,
+# so streaming responses that keep sending data are unaffected.
+DEFAULT_HTTP_TIMEOUT = 300  # 5 minutes
+
+
+class TimeoutHTTPAdapter(HTTPAdapter):
+    """
+    HTTP adapter that enforces a default socket timeout on every request.
+    Prevents workers from hanging indefinitely on unresponsive API calls.
+    """
+
+    def __init__(self, timeout: int = DEFAULT_HTTP_TIMEOUT, *args: Any, **kwargs: Any) -> None:
+        self.timeout = timeout
+        super().__init__(*args, **kwargs)
+
+    def send(self, request: requests.PreparedRequest, **kwargs: Any) -> requests.Response:  # type: ignore[override]
+        kwargs.setdefault("timeout", self.timeout)
+        return super().send(request, **kwargs)
+
+
+def _mount_timeout_adapter(requester: Any) -> None:
+    """Mount `TimeoutHTTPAdapter` on a requester's HTTP session.
+
+    Ensures every Google Ads HTTP call has a default socket-level idle timeout,
+    including parent-stream fetches that route through the stock CDK `HttpRequester`
+    (e.g. `customer_client`, `customer_client_non_manager`, `accessible_accounts`).
+    """
+    http_client = getattr(requester, "_http_client", None)
+    session = getattr(http_client, "_session", None) if http_client is not None else None
+    if session is not None:
+        session.mount("https://", TimeoutHTTPAdapter(timeout=DEFAULT_HTTP_TIMEOUT))
+
+
 REPORT_MAPPING = {
     "account_performance_report": "customer",
     "ad_group_ad_legacy": "ad_group_ad",
+    "ad_performance": "ad_group_ad",
     "ad_group_bidding_strategy": "ad_group",
     "ad_listing_group_criterion": "ad_group_criterion",
     "campaign_real_time_bidding_settings": "campaign",
     "campaign_bidding_strategy": "campaign",
+    "geographic_view_with_metrics": "geographic_view",
+    "geo_performance": "geographic_view",
     "service_accounts": "customer",
 }
 
@@ -140,6 +187,55 @@ class FlattenNestedDictsTransformation(RecordTransformation):
             _flatten(top_key, nested)
 
 
+@dataclass
+class SerializeMessageFieldsTransformation(RecordTransformation):
+    """
+    Serializes MESSAGE-type fields (nested dict values) to JSON strings before
+    flattening occurs. This prevents FlattenNestedDictsTransformation from
+    recursively flattening MESSAGE fields like change_event.old_resource and
+    change_event.new_resource, which would create sub-keys not present in
+    the schema and cause the original field values to be lost (returned as NULL).
+
+    This transformation must run AFTER KeysToSnakeCaseGoogleAdsTransformation
+    and BEFORE FlattenNestedDictsTransformation in the custom query stream
+    transformation chain.
+
+    The set of MESSAGE-type field names is populated by
+    CustomGAQuerySchemaLoader.get_json_schema() during stream initialization
+    and stored on the CustomGAQuerySchemaLoader class.
+    """
+
+    def transform(
+        self,
+        record: Dict[str, Any],
+        config: Optional[Config] = None,
+        stream_state: Optional[StreamState] = None,
+        stream_slice: Optional[StreamSlice] = None,
+    ) -> None:
+        message_fields: set = CustomGAQuerySchemaLoader._all_message_fields
+        if not message_fields:
+            return
+
+        for field_name in message_fields:
+            parts = field_name.split(".")
+            current = record
+            for part in parts[:-1]:
+                if isinstance(current, dict) and part in current:
+                    current = current[part]
+                else:
+                    current = None
+                    break
+
+            if current is not None and isinstance(current, dict):
+                last_part = parts[-1]
+                if last_part in current:
+                    value = current[last_part]
+                    if isinstance(value, dict):
+                        current[last_part] = json.dumps(value)
+                    elif isinstance(value, list):
+                        current[last_part] = [json.dumps(item) if isinstance(item, dict) else item for item in value]
+
+
 class DoubleQuotedDictTypeTransformer(TypeTransformer):
     """
     Convert arrays of dicts into JSON-formatted string arrays using double quotes only
@@ -228,7 +324,9 @@ class GoogleAdsPerPartitionStateMigration(StateMigration):
         self._cursor_field = cursor_field
 
     def should_migrate(self, stream_state: Mapping[str, Any]) -> bool:
-        return stream_state and "state" not in stream_state
+        if not stream_state:
+            return False
+        return not any(key in stream_state for key in ("state", "states", "use_global_cursor"))
 
     def _read_parent_stream(self) -> Iterable[Record]:
         for partition in self._parent_stream.generate_partitions():
@@ -283,6 +381,11 @@ class GoogleAdsHttpRequester(HttpRequester):
     """
 
     schema_loader: InlineSchemaLoader = None
+
+    def __post_init__(self, parameters: Mapping[str, Any]) -> None:
+        super().__post_init__(parameters)
+        self.stream_response = True
+        _mount_timeout_adapter(self)
 
     def get_request_body_json(
         self,
@@ -408,54 +511,6 @@ class KeysToSnakeCaseGoogleAdsTransformation(RecordTransformation):
 
 
 @dataclass
-class ChangeStatusRetriever(SimpleRetriever):
-    """
-    Retrieves change status records from the Google Ads API.
-    ChangeStatus stream requires custom retriever because Google Ads API requires limit for this stream to be set to 10,000.
-    When the number of records exceeds this limit, we need to adjust the start date to the last record's cursor.
-    """
-
-    QUERY_LIMIT = 10000
-    cursor_field: str = "change_status.last_change_date_time"
-
-    def _read_pages(
-        self,
-        records_generator_fn: Callable[[Optional[Mapping]], Iterable[Record]],
-        stream_state: StreamState,
-        stream_slice: StreamSlice,
-    ) -> Iterable[Record]:
-        """
-        Since this stream doesn’t support “real” pagination, we treat each HTTP
-        call as a slice defined by a start_date / end_date. If we hit the
-        QUERY_LIMIT exactly, we assume there may be more data at the end of that
-        slice, so we bump start_date forward to the last-record cursor and retry.
-        """
-        while True:
-            record_count = 0
-            last_record = None
-            response = self._fetch_next_page(stream_state, stream_slice)
-
-            # Yield everything we got
-            for rec in records_generator_fn(response):
-                record_count += 1
-                last_record = rec
-                yield rec
-
-            if record_count < self.QUERY_LIMIT:
-                break
-
-            # Update the stream slice start time to the last record's cursor
-            last_cursor = last_record[self.cursor_field]
-            cursor_slice = stream_slice.cursor_slice
-            cursor_slice["start_time"] = last_cursor
-            stream_slice = StreamSlice(
-                partition=stream_slice.partition,
-                cursor_slice=cursor_slice,
-                extra_fields=stream_slice.extra_fields,
-            )
-
-
-@dataclass
 class ChangeStatusRequester(GoogleAdsHttpRequester):
     CURSOR_FIELD: str = "change_status.last_change_date_time"
     LIMIT: int = 10000
@@ -490,17 +545,24 @@ class CriterionRetriever(SimpleRetriever):
     Retrieves Criterion records based on ChangeStatus updates.
 
     For each parent_slice:
-      1) Emits a “deleted” record for any REMOVED status.
+      1) Emits a "deleted" record for any REMOVED status.
       2) Batches the remaining IDs into a single fetch.
       3) Attaches the original ChangeStatus timestamp to each returned record.
     """
 
     cursor_field: str = "change_status.last_change_date_time"
 
+    def __post_init__(self, parameters: Mapping[str, Any]) -> None:
+        super().__post_init__(parameters)
+        # CustomRequester requires a name at init time but the real stream name is only
+        # available after the retriever is fully constructed; propagate it here.
+        if hasattr(self.requester, "name"):
+            self.requester.name = self.name
+        _mount_timeout_adapter(self.requester)
+
     def _read_pages(
         self,
         records_generator_fn: Callable[[Optional[Mapping]], Iterable[Record]],
-        stream_state: StreamState,
         stream_slice: StreamSlice,
     ) -> Iterable[Record]:
         """
@@ -530,6 +592,7 @@ class CriterionRetriever(SimpleRetriever):
                             self.primary_key[0]: _id,
                             "deleted_at": ts,
                         },
+                        associated_slice=stream_slice,
                         stream_name=self.name,
                     )
                 else:
@@ -549,11 +612,109 @@ class CriterionRetriever(SimpleRetriever):
                 cursor_slice=stream_slice.cursor_slice,
                 extra_fields={"change_status.last_change_date_time": updated_times},
             )
-            response = self._fetch_next_page(stream_state, new_slice)
+            response = self._fetch_next_page(new_slice)
             for rec in records_generator_fn(response):
                 # attach timestamp from ChangeStatus
                 rec.data[self.cursor_field] = time_map.get(rec.data.get(self.primary_key[0]))
                 yield rec
+
+
+@dataclass
+class GoogleAdsRetriever(SimpleRetriever):
+    """
+    Custom retriever for Google Ads that recovers from a ChunkedEncodingError (or a read timeout's
+    ConnectionError) raised while a large report is streamed.
+
+    When the window can still be halved, the error is turned into the CDK's
+    RequestWindowSplitRequiredException and SimpleRetriever splits the date window with the stream's
+    own cursor and reads each half in turn, down to cursor_granularity (1 day). A window that cannot be
+    split any further (a 1-day window, or a stream whose cursor cannot split) is retried in place up to
+    MAX_RETRIES times before failing with a transient error: a mid-stream drop is a transport blip, so the
+    same window usually succeeds on the next attempt.
+
+    The splitting is wired here rather than through `request_window_splitting` in the manifest: the CDK
+    does not build that block for a CustomRetriever, so this class takes the stream cursor through the
+    `cursor` field (the factory passes it to every retriever) and binds the splitter itself.
+
+    Note: if the error occurs after some records have already been yielded, those records are re-emitted
+    when the window is split or retried. Primary keys only remove them in deduplicated sync modes; plain
+    Append keeps them on every stream.
+    """
+
+    MAX_RETRIES: ClassVar[int] = 3
+
+    decoder: Decoder | None = None
+    cursor: Optional[Cursor] = None
+    request_window_splitting: Optional[RequestWindowSplitting] = RequestWindowSplitting()
+
+    def __post_init__(self, parameters: Mapping[str, Any]) -> None:
+        super().__post_init__(parameters)
+        if hasattr(self.requester, "name"):
+            self.requester.name = self.name
+        if self.decoder and isinstance(self.record_selector.extractor, DpathExtractor):
+            self.record_selector.extractor.decoder = self.decoder
+        _mount_timeout_adapter(self.requester)
+        # Streams without incremental_sync get a FinalStateCursor, which has no `split_request_window`; the criterion
+        # streams' full refresh branch gets a per-partition cursor without cursor_granularity, whose splitter returns
+        # None. Both retry in place.
+        self.request_window_splitter = getattr(self.cursor, "split_request_window", None)
+
+    def _read_pages(
+        self,
+        records_generator_fn: Callable[[Optional[Mapping]], Iterable[Record]],
+        stream_slice: StreamSlice,
+    ) -> Iterable[Record]:
+        yield from self._read_pages_with_retry(records_generator_fn, stream_slice, retry_count=0)
+
+    def _read_pages_with_retry(
+        self,
+        records_generator_fn: Callable[[Optional[Mapping]], Iterable[Record]],
+        stream_slice: StreamSlice,
+        retry_count: int,
+    ) -> Iterable[Record]:
+        try:
+            yield from super()._read_pages(records_generator_fn, stream_slice)
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError) as error:
+            # ConnectionError here is a stall past the idle timeout (iter_content); HttpClient retries and wraps pre-header ones.
+            if self._can_split_window(stream_slice):
+                logger.warning(f"Response stream was interrupted for {stream_slice.cursor_slice}; splitting the window: {error}")
+                raise RequestWindowSplitRequiredException(stream_name=self.name, error_message=str(error)) from error
+
+            start, end = stream_slice.cursor_slice.get("start_time"), stream_slice.cursor_slice.get("end_time")
+            at_minimum_window = bool(start) and start == end
+            if retry_count < self.MAX_RETRIES:
+                if at_minimum_window:
+                    logger.warning(f"{type(error).__name__} on minimum slice size (1 day). Retry {retry_count + 1}/{self.MAX_RETRIES}...")
+                else:
+                    logger.warning(
+                        f"{type(error).__name__} on slice without date boundaries (full refresh stream). "
+                        f"Retry {retry_count + 1}/{self.MAX_RETRIES}..."
+                    )
+                yield from self._read_pages_with_retry(records_generator_fn, stream_slice, retry_count + 1)
+                return
+
+            if at_minimum_window:
+                raise AirbyteTracedException(
+                    message="Response stream was interrupted. The slice is already at minimum size (1 day) "
+                    f"and {self.MAX_RETRIES} retries were exhausted.",
+                    internal_message=f"{type(error).__name__} persisted after {self.MAX_RETRIES} retries on minimum slice.",
+                    failure_type=FailureType.transient_error,
+                ) from error
+            raise AirbyteTracedException(
+                message=f"Response stream was interrupted. {self.MAX_RETRIES} retries were exhausted.",
+                internal_message=f"{type(error).__name__} persisted after {self.MAX_RETRIES} retries on full refresh slice.",
+                failure_type=FailureType.transient_error,
+            ) from error
+
+    def _can_split_window(self, stream_slice: StreamSlice) -> bool:
+        """
+        Ask the cursor whether `stream_slice` can still be halved, with the same `min_split_window` the CDK
+        will use. The cursor owns the floor: no splitter (FinalStateCursor), no `cursor_granularity`, or a window
+        already at one granularity unit all answer `None`.
+        """
+        if self.request_window_splitter is None or self.request_window_splitting is None:
+            return False
+        return self.request_window_splitter(stream_slice, self.request_window_splitting.min_split_window) is not None
 
 
 @dataclass
@@ -617,13 +778,26 @@ class GoogleAdsCriterionParentStateMigration(StateMigration):
     """
 
     def should_migrate(self, stream_state: Mapping[str, Any]) -> bool:
-        return stream_state and "parent_state" not in stream_state
+        return stream_state and not stream_state.get("parent_state")
 
     def migrate(self, stream_state: Mapping[str, Any]) -> Mapping[str, Any]:
         if not self.should_migrate(stream_state):
             return stream_state
 
-        return {"parent_state": stream_state}
+        return {"parent_state": {"change_status": stream_state}}
+
+
+class GoogleAdsGlobalStateMigration(StateMigration):
+    """
+    Migrates global state to include use_global_cursor key. Previously legacy GlobalSubstreamCursor was used.
+    """
+
+    def should_migrate(self, stream_state: Mapping[str, Any]) -> bool:
+        return stream_state and not stream_state.get("use_global_cursor")
+
+    def migrate(self, stream_state: Mapping[str, Any]) -> Mapping[str, Any]:
+        stream_state["use_global_cursor"] = True
+        return stream_state
 
 
 @dataclass(repr=False, eq=False, frozen=True)
@@ -724,6 +898,8 @@ class CustomGAQueryHttpRequester(HttpRequester):
     def __post_init__(self, parameters: Mapping[str, Any]):
         super().__post_init__(parameters=parameters)
         self.query = GAQL.parse(parameters.get("query"))
+        self.stream_response = True
+        _mount_timeout_adapter(self)
 
     @staticmethod
     def is_metrics_in_custom_query(query: GAQL) -> bool:
@@ -788,21 +964,55 @@ class CustomGAQueryHttpRequester(HttpRequester):
         return self.query[from_index + 4 :].strip()
 
 
+class CustomGAQueryClickViewHttpRequester(CustomGAQueryHttpRequester):
+    @staticmethod
+    def _insert_segments_date_expr(query: GAQL, start_date: str, end_date: str) -> GAQL:
+        if "segments.date" not in query.fields:
+            query = query.append_field("segments.date")
+        condition = f"segments.date ='{start_date}'"
+        if query.where:
+            return query.set_where(query.where + " AND " + condition)
+        return query.set_where(condition)
+
+
 @dataclass()
 class CustomGAQuerySchemaLoader(SchemaLoader):
     """
     Custom schema loader for custom query streams. Parses the user-provided query to extract the fields and then queries the Google Ads API for each field to retreive field metadata.
     """
 
-    requester: HttpRequester
     config: Config
 
     query: str = ""
     cursor_field: Union[str, InterpolatedString] = ""
 
+    _google_ads_client: Optional[GoogleAds] = None
+    _client_lock = threading.Lock()
+    _all_message_fields: ClassVar[Set[str]] = set()
+
     def __post_init__(self):
         self._cursor_field = InterpolatedString.create(self.cursor_field, parameters={}) if self.cursor_field else None
         self._validate_query(self.query)
+
+    @classmethod
+    def google_ads_client(cls, config: Config) -> GoogleAds:
+        """
+        Lazily creates a single GoogleAds client shared by all instances of this class.
+        First call wins (its config is used).
+        """
+        if cls._google_ads_client is None:
+            with cls._client_lock:
+                if cls._google_ads_client is None:
+                    cls._google_ads_client = GoogleAds(credentials=cls.get_credentials(config))
+        return cls._google_ads_client
+
+    @staticmethod
+    def get_credentials(config: Mapping[str, Any]) -> MutableMapping[str, Any]:
+        credentials = config["credentials"]
+        # use_proto_plus is set to True, because setting to False returned wrong value types, which breaks the backward compatibility.
+        # For more info read the related PR's description: https://github.com/airbytehq/airbyte/pull/9996
+        credentials.update(use_proto_plus=True)
+        return credentials
 
     def get_json_schema(self) -> Dict[str, Any]:
         local_json_schema = {
@@ -812,95 +1022,35 @@ class CustomGAQuerySchemaLoader(SchemaLoader):
             "additionalProperties": True,
         }
 
-        for field in self._get_list_of_fields():
-            field_metadata_response_json = self._get_field_metadata(field)
-            field_value = self._build_field_value(field, field_metadata_response_json)
+        fields = self._get_list_of_fields()
+        fields_metadata = self.google_ads_client(self.config).get_fields_metadata(fields)
+
+        message_fields: set = set()
+        for field, field_metadata in fields_metadata.items():
+            if field_metadata.data_type.name == "MESSAGE":
+                message_fields.add(field)
+            field_value = self._build_field_value(field, field_metadata)
             local_json_schema["properties"][field] = field_value
 
+        CustomGAQuerySchemaLoader._all_message_fields = CustomGAQuerySchemaLoader._all_message_fields | message_fields
         return local_json_schema
 
-    def _build_field_value(self, field: str, response_json: Dict[str, Any]) -> Any:
-        field_value = {"type": [GOOGLE_ADS_DATATYPE_MAPPING.get(response_json["dataType"], response_json["dataType"]), "null"]}
+    def _build_field_value(self, field: str, field_metadata) -> Any:
+        # Data type return in enum format: "GoogleAdsFieldDataType.<data_type>"
+        google_data_type = field_metadata.data_type.name
+        field_value = {"type": [GOOGLE_ADS_DATATYPE_MAPPING.get(google_data_type, "string"), "null"]}
 
-        if response_json["dataType"] == "DATE" and field in DATE_TYPES:
+        # Google Ads doesn't differentiate between DATE and DATETIME, so we need to manually check for fields with known type
+        if google_data_type == "DATE" and field in DATE_TYPES:
             field_value["format"] = "date"
 
-        if response_json["dataType"] == "ENUM":
-            field_value["enum"] = [value for value in response_json["enumValues"]]
+        if google_data_type == "ENUM":
+            field_value = {"type": "string", "enum": list(field_metadata.enum_values)}
 
-        if response_json["isRepeated"]:
+        if field_metadata.is_repeated:
             field_value = {"type": ["null", "array"], "items": field_value}
 
         return field_value
-
-    def _get_field_metadata(self, field: str) -> Dict[str, Any]:
-        url = f"https://googleads.googleapis.com/v20/googleAdsFields/{field}"
-
-        max_tries = 5
-        base_backoff_time = 5  # Start with 5 seconds for exponential backoff
-
-        last_exception = None
-
-        for attempt in range(max_tries):
-            headers = self._get_request_headers()
-
-            try:
-                logger.debug(f"`GET` request for field metadata for {field}, url: {url}, attempt: {attempt + 1}/{max_tries}")
-                response = requests.get(
-                    url=url,
-                    headers=headers,
-                )
-
-                response.raise_for_status()
-                response_json = response.json()
-                logger.debug(f"Metadata response for {field}: {response_json}")
-
-                error = response_json.get("error")
-                if error:
-                    failure_type = FailureType.transient_error if error["code"] >= 500 else FailureType.config_error
-                    raise AirbyteTracedException(
-                        failure_type=failure_type,
-                        internal_message=f"Failed to get field metadata for {field}, error: {error}",
-                        message=f"The provided field is invalid: Status: '{error.get('status')}', Message: '{error.get('message')}', Field: '{field}'",
-                    )
-
-                return response_json
-
-            except requests.HTTPError as e:
-                last_exception = e
-
-                if (
-                    last_exception.response.status_code >= 400
-                    and last_exception.response.status_code < 500
-                    and last_exception.response.status_code != 429
-                ) or attempt == max_tries - 1:
-                    break
-
-                # exponential backoff
-                backoff_time = base_backoff_time * (2**attempt)
-                logger.debug(
-                    f"Request failed on attempt {attempt + 1} with status code {last_exception.response.status_code}, retrying in {backoff_time} seconds"
-                )
-                time.sleep(backoff_time)
-
-        if last_exception.response.status_code == 429:
-            raise AirbyteTracedException(
-                failure_type=FailureType.transient_error,
-                message="The maximum number of requests on the Google Ads API has been reached. See https://developers.google.com/google-ads/api/docs/access-levels#access_levels_2 for more information",
-                internal_message=str(last_exception),
-            )
-        elif last_exception.response.status_code >= 400 and last_exception.response.status_code < 500:
-            raise AirbyteTracedException(
-                failure_type=FailureType.config_error,
-                message="The provided field is invalid. Please refer to the Google Ads API documentation for the correct syntax: https://developers.google.com/google-ads/api/fields/v20/overview and test validate your query using the Google Ads Query Builder: https://developers.google.com/google-ads/api/fields/v20/query_validator",
-                internal_message=f"The provided field is invalid: Error: {str(last_exception)}",
-            )
-        else:
-            raise AirbyteTracedException(
-                failure_type=FailureType.transient_error,
-                message="The Google Ads API is temporarily unavailable.",
-                internal_message=f"The Google Ads API is temporarily unavailable: Error: {str(last_exception)}",
-            )
 
     def _get_list_of_fields(self) -> List[str]:
         """
@@ -909,7 +1059,10 @@ class CustomGAQuerySchemaLoader(SchemaLoader):
         """
         query_upper = self.query.upper()
         select_index = query_upper.find("SELECT")
-        from_index = query_upper.find("FROM")
+        match = re.search(r"\bFROM\b", query_upper)
+        if not match:
+            raise ValueError("Could not find a valid FROM clause in query")
+        from_index = match.start()
 
         fields_portion = self.query[select_index + 6 : from_index].strip()
 
@@ -921,21 +1074,227 @@ class CustomGAQuerySchemaLoader(SchemaLoader):
 
         return fields
 
-    def _get_request_headers(self) -> Mapping[str, Any]:
-        headers = {}
-        auth_headers = self.requester.authenticator.get_auth_header()
-        if auth_headers:
-            headers.update(auth_headers)
-
-        headers["developer-token"] = self.config["credentials"]["developer_token"]
-        return headers
-
     def _validate_query(self, query: str):
         try:
             GAQL.parse(query)
         except ValueError:
             raise AirbyteTracedException(
                 failure_type=FailureType.config_error,
-                internal_message=f"The provided query is invalid: {query}. Please refer to the Google Ads API documentation for the correct syntax: https://developers.google.com/google-ads/api/fields/v20/overview and test validate your query using the Google Ads Query Builder: https://developers.google.com/google-ads/api/fields/v20/query_validator",
-                message=f"The provided query is invalid: {query}. Please refer to the Google Ads API documentation for the correct syntax: https://developers.google.com/google-ads/api/fields/v20/overview and test validate your query using the Google Ads Query Builder: https://developers.google.com/google-ads/api/fields/v20/query_validator",
+                internal_message=f"The provided query is invalid: {query}. Please refer to the Google Ads API documentation for the correct syntax: https://developers.google.com/google-ads/api/fields/v23/overview and test validate your query using the Google Ads Query Builder: https://developers.google.com/google-ads/api/fields/v23/query_validator",
+                message=f"The provided query is invalid: {query}. Please refer to the Google Ads API documentation for the correct syntax: https://developers.google.com/google-ads/api/fields/v23/overview and test validate your query using the Google Ads Query Builder: https://developers.google.com/google-ads/api/fields/v23/query_validator",
             )
+
+
+@dataclass
+class StringParseState:
+    inside_string: bool = False
+    escape_next_character: bool = False
+    collected_string_chars: List[str] = field(default_factory=list)
+    last_parsed_key: Optional[str] = None
+
+
+@dataclass
+class TopLevelObjectState:
+    depth: int = 0
+
+
+@dataclass
+class ResultsArrayState:
+    inside_results_array: bool = False
+    array_nesting_depth: int = 0
+    expecting_results_array_start: bool = False
+
+
+@dataclass
+class RecordParseState:
+    inside_record: bool = False
+    record_text_buffer: List[str] = field(default_factory=list)
+    record_nesting_depth: int = 0
+
+
+@dataclass
+class GoogleAdsStreamingDecoder(Decoder):
+    """
+    JSON streaming decoder optimized for Google Ads API responses.
+
+    Uses a fast JSON parse when the full payload fits within max_direct_decode_bytes;
+    otherwise streams records incrementally from the `results` array.
+    Ensures truncated or structurally invalid JSON is detected and reported.
+    """
+
+    chunk_size: int = 5 * 1024 * 1024  # 5 MB
+    # Fast-path threshold: if whole body < 20 MB, decode with json.loads
+    max_direct_decode_bytes: int = 20 * 1024 * 1024  # 20 MB
+
+    def __post_init__(self):
+        self.parser = JsonParser()
+
+    def is_stream_response(self) -> bool:
+        return True
+
+    def decode(self, response: requests.Response) -> Generator[MutableMapping[str, Any], None, None]:
+        data, complete = self._buffer_up_to_limit(response)
+        if complete:
+            yield from self.parser.parse(io.BytesIO(data))
+            return
+
+        records_batch: List[Dict[str, Any]] = []
+        for record in self._parse_records_from_stream(data):
+            records_batch.append(record)
+            if len(records_batch) >= 100:
+                yield {"results": records_batch}
+                records_batch = []
+
+        if records_batch:
+            yield {"results": records_batch}
+
+    def _buffer_up_to_limit(self, response: requests.Response) -> Tuple[Union[bytes, Iterable[bytes]], bool]:
+        buf = bytearray()
+        response_stream = response.iter_content(chunk_size=self.chunk_size)
+
+        while chunk := next(response_stream, None):
+            buf.extend(chunk)
+            if len(buf) >= self.max_direct_decode_bytes:
+                return (self._chain_prefix_and_stream(bytes(buf), response_stream), False)
+        return (bytes(buf), True)
+
+    @staticmethod
+    def _chain_prefix_and_stream(prefix: bytes, rest_stream: Iterable[bytes]) -> Iterable[bytes]:
+        yield prefix
+        yield from rest_stream
+
+    def _parse_records_from_stream(self, byte_iter: Iterable[bytes], encoding: str = "utf-8") -> Generator[Dict[str, Any], None, None]:
+        string_state = StringParseState()
+        results_state = ResultsArrayState()
+        record_state = RecordParseState()
+        top_level_state = TopLevelObjectState()
+        decoder = codecs.getincrementaldecoder(encoding)(errors="replace")
+
+        def decoded_chunks() -> Iterable[str]:
+            for chunk in byte_iter:
+                yield decoder.decode(chunk)
+            yield decoder.decode(b"", final=True)
+
+        for decoded_chunk in decoded_chunks():
+            for char in decoded_chunk:
+                self._append_to_current_record_if_any(char, record_state)
+
+                if self._update_string_state(char, string_state):
+                    continue
+
+                # Track outer braces only outside results array
+                if not results_state.inside_results_array:
+                    if char == "{":
+                        top_level_state.depth += 1
+                    elif char == "}":
+                        top_level_state.depth = max(0, top_level_state.depth - 1)
+
+                if not results_state.inside_results_array:
+                    self._detect_results_array(char, string_state, results_state)
+                    continue
+
+                record = self._parse_record_structure(char, results_state, record_state)
+                if record is not None:
+                    yield record
+
+        # EOF validation
+        if (
+            string_state.inside_string
+            or record_state.inside_record
+            or record_state.record_nesting_depth != 0
+            or results_state.inside_results_array
+            or results_state.array_nesting_depth != 0
+            or top_level_state.depth != 0
+        ):
+            raise AirbyteTracedException(
+                message="Response JSON stream ended prematurely and is incomplete.",
+                internal_message=(
+                    "Detected truncated JSON stream: one or more structural elements were not fully closed before the response ended."
+                ),
+                failure_type=FailureType.system_error,
+            )
+
+    def _update_string_state(self, char: str, state: StringParseState) -> bool:
+        """Return True if char was handled as part of string parsing."""
+        if state.inside_string:
+            if state.escape_next_character:
+                state.escape_next_character = False
+                return True
+            if char == "\\":
+                state.escape_next_character = True
+                return True
+            if char == '"':
+                state.inside_string = False
+                state.last_parsed_key = "".join(state.collected_string_chars)
+                state.collected_string_chars.clear()
+                return True
+            state.collected_string_chars.append(char)
+            return True
+
+        if char == '"':
+            state.inside_string = True
+            state.collected_string_chars.clear()
+            return True
+
+        return False
+
+    def _detect_results_array(self, char: str, string_state: StringParseState, results_state: ResultsArrayState) -> None:
+        if char == ":" and string_state.last_parsed_key == "results":
+            results_state.expecting_results_array_start = True
+        elif char == "[" and results_state.expecting_results_array_start:
+            results_state.inside_results_array = True
+            results_state.array_nesting_depth = 1
+            results_state.expecting_results_array_start = False
+
+    def _parse_record_structure(
+        self, char: str, results_state: ResultsArrayState, record_state: RecordParseState
+    ) -> Optional[Dict[str, Any]]:
+        if char == "{":
+            if record_state.inside_record:
+                record_state.record_nesting_depth += 1
+            else:
+                self._start_record(record_state)
+            return None
+
+        if char == "}":
+            if record_state.inside_record:
+                record_state.record_nesting_depth -= 1
+                if record_state.record_nesting_depth == 0:
+                    return self._finish_record(record_state)
+            return None
+
+        if char == "[":
+            if record_state.inside_record:
+                record_state.record_nesting_depth += 1
+            else:
+                results_state.array_nesting_depth += 1
+            return None
+
+        if char == "]":
+            if record_state.inside_record:
+                record_state.record_nesting_depth -= 1
+            else:
+                results_state.array_nesting_depth -= 1
+                if results_state.array_nesting_depth == 0:
+                    results_state.inside_results_array = False
+
+        return None
+
+    @staticmethod
+    def _append_to_current_record_if_any(char: str, record_state: RecordParseState):
+        if record_state.inside_record:
+            record_state.record_text_buffer.append(char)
+
+    @staticmethod
+    def _start_record(record_state: RecordParseState):
+        record_state.inside_record = True
+        record_state.record_text_buffer = ["{"]
+        record_state.record_nesting_depth = 1
+
+    @staticmethod
+    def _finish_record(record_state: RecordParseState) -> Optional[Dict[str, Any]]:
+        text = "".join(record_state.record_text_buffer).strip()
+        record_state.inside_record = False
+        record_state.record_text_buffer.clear()
+        record_state.record_nesting_depth = 0
+        return json.loads(text) if text else None

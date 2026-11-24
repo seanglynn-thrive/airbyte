@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 package io.airbyte.integrations.destination.teradata
 
@@ -141,7 +141,7 @@ open class TeradataDestinationAcceptanceTest : JdbcDestinationAcceptanceTest() {
                 "Environemnt " +
                     configJson["env_name"].asText() +
                     " is not available. " +
-                    be.message
+                    be.message,
             )
         }
     }
@@ -162,7 +162,7 @@ open class TeradataDestinationAcceptanceTest : JdbcDestinationAcceptanceTest() {
         testEnv: TestDestinationEnv?,
         streamName: String,
         namespace: String,
-        streamSchema: JsonNode
+        streamSchema: JsonNode,
     ): List<JsonNode> {
         return retrieveRecordsFromTable(namingResolver.getIdentifier(streamName), namespace)
     }
@@ -239,7 +239,7 @@ open class TeradataDestinationAcceptanceTest : JdbcDestinationAcceptanceTest() {
             TeradataConstants.DRIVER_CLASS,
             jdbcConfig[JdbcUtils.JDBC_URL_KEY].asText(),
             getConnectionProperties(config),
-            Duration.ofSeconds(10)
+            Duration.ofSeconds(10),
         )
     }
 
@@ -260,7 +260,7 @@ open class TeradataDestinationAcceptanceTest : JdbcDestinationAcceptanceTest() {
 
     private fun assertCustomParametersDontOverwriteDefaultParameters(
         customParameters: Map<String, String>,
-        defaultParameters: Map<String, String>
+        defaultParameters: Map<String, String>,
     ) {
         for (key in defaultParameters.keys) {
             require(

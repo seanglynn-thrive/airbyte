@@ -1,5 +1,5 @@
 ---
-products: oss-community, oss-enterprise
+products: oss-community
 ---
 
 import Tabs from '@theme/Tabs';
@@ -7,21 +7,162 @@ import TabItem from '@theme/TabItem';
 
 # Ingress
 
-:::tip
-If you are using `abctl` to manage your deployment, a nginx ingress is automatically provided for you. There is no need to provision an additional ingress.
+Ingress controls access to your Airbyte deployment.
+
+## How to manage ingress
+
+Managing ingress with Airbyte works differently depending on whether you deploy with Helm or abctl.
+
+- **If you are using abctl**, an NGINX ingress is automatically provided for you. You don't need to provision an additional ingress.
+
+- **If you are using Helm**, you need to configure ingress for your deployment. You have two options.
+
+  - **Use Airbyte's Helm chart ingress configuration** - Configure ingress through your `values.yaml` file.
+
+  - **Bring your own ingress** - Manually create and manage your own Kubernetes ingress resource.
+
+    Use the Helm chart ingress configuration if you want Airbyte to manage ingress creation and updates automatically. Use your own ingress if you need custom ingress configurations beyond what the Helm chart provides, or if you prefer to manage ingress independently.
+
+## Request body size
+
+The Airbyte server, workers, and workload API server each default to a maximum request body size of 50 MB (52,428,800 bytes). Larger requests, such as requests containing large discovered catalogs, can fail with HTTP `413` errors.
+
+Airbyte's Helm chart ingress routes only to the Airbyte server. For requests from outside the cluster, configure your ingress controller and any reverse proxies to allow at least the server's request body limit. The worker and workload API server limits apply to requests inside the cluster, not traffic through this ingress.
+
+For ingress-nginx, the default [`proxy-body-size`](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/#proxy-body-size) is `1m`. Use the [`nginx.ingress.kubernetes.io/proxy-body-size` annotation](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#custom-max-body-size) to set the limit for your ingress. The NGINX examples below set it to `"50m"` to match Airbyte's default.
+
+:::warning abctl request limit
+
+abctl v0.30.4 limits incoming requests to 10 MB through its NGINX ingress, even when the Airbyte server allows larger requests. Increasing the limit on a reverse proxy in front of abctl doesn't raise this ingress limit.
+
 :::
 
-To access the Airbyte UI, you will need to manually attach an ingress configuration to your deployment. These guides assume that you have already deployed an Ingress Controller.
-The following is a simplified definition of an ingress resource you could use for your Airbyte instance:
+### Increase the limit for a Helm deployment
 
-:::tip
+To allow larger requests, set all three [request size variables](../../operator-guides/configuring-airbyte.md#airbyte-services) to the same byte value on `server`, `worker`, and `workloadApiServer` in your `values.yaml` file. Raising only one limit can still result in HTTP `413` errors. For requests through the server ingress, also increase the ingress and any reverse proxy limits to match.
+
+For example, this configuration sets the service limits to 100 MB (104,857,600 bytes) and the ingress-nginx limit to `100m`:
+
+```yaml
+server:
+  env_vars:
+    MICRONAUT_SERVER_MAX_REQUEST_SIZE: "104857600"
+    MICRONAUT_SERVER_MAX_REQUEST_BUFFER_SIZE: "104857600"
+    NETTY_AGGREGATOR_MAX_CONTENT_LENGTH: "104857600"
+worker:
+  env_vars:
+    MICRONAUT_SERVER_MAX_REQUEST_SIZE: "104857600"
+    MICRONAUT_SERVER_MAX_REQUEST_BUFFER_SIZE: "104857600"
+    NETTY_AGGREGATOR_MAX_CONTENT_LENGTH: "104857600"
+workloadApiServer:
+  env_vars:
+    MICRONAUT_SERVER_MAX_REQUEST_SIZE: "104857600"
+    MICRONAUT_SERVER_MAX_REQUEST_BUFFER_SIZE: "104857600"
+    NETTY_AGGREGATOR_MAX_CONTENT_LENGTH: "104857600"
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+```
+
+Apply the updated values with `helm upgrade`.
+
+## Before you begin: you must set up an ingress controller
+
+Before enabling ingress in Airbyte, you must have an ingress controller deployed in your Kubernetes cluster. Airbyte doesn't install or manage the ingress controller. Without one, your configurations in Airbyte can't do anything. Refer to your ingress controller's documentation for installation instructions.
+
+- [NGINX Ingress Controller](https://kubernetes.github.io/ingress-nginx/deploy/)
+- [AWS Load Balancer Controller](https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html)
+- Other ingress controllers: Refer to your controller's official documentation
+
+For TLS certificate management, refer to tools like [cert-manager](https://cert-manager.io/docs/) or your cloud provider's certificate management service.
+
 Set appropriate backend timeout values for the Airbyte server ingress. Timeout values that are too short can lead to 504 errors in the UI when creating new sources or destinations.
+
+## Option 1: Use Airbyte's Helm chart
+
+:::note
+Follow the configuration examples below.
 :::
+
+You can configure ingress directly in your `values.yaml` file. Airbyte will automatically create and manage the ingress resource for you.
+
+### Basic configuration
+
+Add the following to your `values.yaml` file. This example routes requests to the Airbyte server:
+
+```yaml
+ingress:
+  enabled: true
+  className: "nginx"  # Specify your ingress class (e.g., "nginx", "alb", etc.)
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  hosts:
+    - host: airbyte.example.com  # Replace with your domain
+      paths:
+        - path: /
+          pathType: Prefix
+          backend: server  # Routes to airbyte-server (UI and API)
+  tls: []
+    # Optionally configure TLS
+    # - secretName: airbyte-tls
+    #   hosts:
+    #     - airbyte.example.com
+```
+
+The `backend` field must be `server`. The Helm chart rejects other backend values.
+
+### Switching from external ingress to Helm chart ingress
+
+If you previously created a manual ingress resource and want to switch to using the Helm chart ingress configuration, follow the steps below. It isn't necessary to switch, and if you already have functioning ingress, it's likely easier to continue using it.
+
+1. Delete your existing manual ingress resource:
+
+   ```bash
+   kubectl delete ingress <your-ingress-name> -n <namespace>
+   ```
+
+2. Add the ingress configuration to your `values.yaml` file as shown above
+
+3. Upgrade your Helm deployment:
+
+   ```bash
+   helm upgrade airbyte airbyte/airbyte \
+     --namespace <namespace> \
+     --values ./values.yaml
+   ```
+
+## Option 2: Bring your own ingress
+
+If you prefer to manage your own ingress resource, you can manually create a Kubernetes ingress resource. This approach gives you complete control over the ingress configuration.
+
+### Switching from Helm Chart Ingress to Manual Ingress
+
+If you previously used the Helm chart ingress configuration and want to switch to manual ingress management:
+
+1. Disable ingress in your `values.yaml`:
+
+   ```yaml
+   ingress:
+     enabled: false
+   ```
+
+2. Upgrade your Helm deployment to remove the ingress resource:
+
+   ```bash
+   helm upgrade airbyte airbyte/airbyte \
+     --namespace <namespace> \
+     --values ./values.yaml
+   ```
+
+3. Create your manual ingress resource using one of the examples below.
+
+### Manual ingress examples
 
 <Tabs>
 <TabItem value="NGINX" label="NGINX">
 
-If you don't already have an NGINX controller installed, you can do it by running `helm install my-release oci://ghcr.io/nginxinc/charts/nginx-ingress --version 1.3.1` or following the [instructions](https://docs.nginx.com/nginx-ingress-controller/installation/installing-nic/installation-with-helm/) from NGINX.
+Refer to the [NGINX Ingress Controller installation documentation](https://kubernetes.github.io/ingress-nginx/deploy/) for setup instructions.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -30,22 +171,13 @@ metadata:
   name: airbyte-ingress # ingress name, example: airbyte-production-ingress
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
 spec:
   ingressClassName: nginx
   rules:
     - host: airbyte.example.com # replace with your host
       http:
         paths:
-          # BEGIN: Self-Managed Enterprise only - Do not include if you are an open source user
-          - backend:
-              service:
-                # format is ${RELEASE_NAME}-airbyte-keycloak-svc 
-                name: airbyte-airbyte-keycloak-svc 
-                port: 
-                  number: 8180 
-            path: /auth
-            pathType: Prefix
-          # END: Self-Managed Enterprise only
           - backend:
               service:
                 # format is ${RELEASE_NAME}-airbyte-connector-builder-server-svc
@@ -67,17 +199,7 @@ spec:
 </TabItem>
 <TabItem value="Amazon ALB" label="Amazon ALB">
 
-First you need to have an ALB deployed. You can read more about ALBs in the detail below. Reference AWS on how to set these up.
-
-<details>
-    <summary>AWS ALBs</summary>
-
-The recommended method for Cluster Ingress is an AWS ALB. This configuration is outside the scope of this documentation. You can find more information on how to correctly configure an ALB Ingress Controller by reading the official [Route application and HTTP traffic with Application Load Balancers](https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html) documentation provided by Amazon.
-
-Once the AWS Load Balancer Controller has been correctly installed the Airbyte installation process is able to automatically create an ALB for you. You can combine the ALB with AWS Certificate Manager (ACM) to secure your instance with TLS. The ACM documentation can be found here: [Getting Started with AWS Certificate Manager](https://aws.amazon.com/certificate-manager/getting-started/). To use the ACM certificate, you can specify the certificate-arn when creating the Kubernetes Ingress. For more information see the [Kubernetes Ingress Annotations documentation](https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.1/guide/ingress/annotations/#certificate-arn).
-</details>
-
-If you intend to use Amazon Application Load Balancer (ALB) for ingress, this ingress definition is close to what's needed to get up and running:
+If you intend to use Amazon Application Load Balancer (ALB) for ingress, this ingress definition is close to what's needed to get up and running. Refer to the AWS documentation for [installing the AWS Load Balancer Controller](https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html). For TLS configuration, see [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/getting-started/).
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -103,15 +225,6 @@ spec:
     - host: airbyte.example.com # replace with your host
       http:
         paths:
-          # BEGIN: Self-Managed Enterprise only - Do not include if you are an open source user
-          - backend:
-              service:
-                name: airbyte-airbyte-keycloak-svc
-                port:
-                  number: 8180
-            path: /auth
-            pathType: Prefix
-          # END: Self-Managed Enterprise only
           - backend:
               service:
                 name: airbyte-airbyte-connector-builder-server-svc
@@ -132,3 +245,12 @@ The ALB controller uses a `ServiceAccount` that requires the [following IAM poli
 
 </TabItem>
 </Tabs>
+
+## Ensure your airbyte URL matches your ingress host
+
+Once you configure ingress, ensure that the value of `global.airbyteUrl` in your values.yaml matches the ingress URL.
+
+```yaml
+global:
+  airbyteUrl: # e.g. https://airbyte.example.com
+```

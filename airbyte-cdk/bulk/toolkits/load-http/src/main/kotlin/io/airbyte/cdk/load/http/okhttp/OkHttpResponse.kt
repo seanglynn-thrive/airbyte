@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.http.okhttp
@@ -16,8 +16,10 @@ class OkHttpResponse(private val response: OkhttpResponse) : Response {
 
     override val statusCode: Int
         get() = response.code
+
     override val headers: Map<String, List<String>>
         get() = response.headers.toMultimap()
+
     override val body: InputStream?
         get() = response.body?.byteStream()
 }

@@ -16,7 +16,7 @@ data:
   connectorSubtype: api
   connectorType: source
   definitionId: df38991e-f35b-4af2-996d-36817f614587
-  dockerImageTag: 0.2.23
+  dockerImageTag: 0.2.24
   dockerRepository: airbyte/source-news-api
   githubIssueLabel: source-news-api
   icon: newsapi.svg
@@ -44,4 +44,8 @@ data:
   #         secretStore:
   #           type: GSM
   #           alias: airbyte-connector-testing-secret-store
+  externalDocumentationUrls:
+    - title: News API documentation
+      url: https://newsapi.org/docs
+      type: api_reference
 metadataSpecVersion: "1.0"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.toolkits.iceberg.parquet.io
@@ -9,7 +9,7 @@ import io.airbyte.cdk.load.command.Dedupe
 import io.airbyte.cdk.load.command.ImportType
 import io.airbyte.cdk.load.command.Overwrite
 import jakarta.inject.Singleton
-import java.util.UUID
+import java.util.*
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.Schema
 import org.apache.iceberg.Table
@@ -17,7 +17,7 @@ import org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT
 import org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT
 import org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES
 import org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT
-import org.apache.iceberg.data.GenericAppenderFactory
+import org.apache.iceberg.data.GenericFileWriterFactory
 import org.apache.iceberg.data.Record
 import org.apache.iceberg.io.BaseTaskWriter
 import org.apache.iceberg.io.OutputFileFactory
@@ -30,7 +30,19 @@ import org.apache.iceberg.util.PropertyUtil
  * and whether primary keys are configured on the destination table's schema.
  */
 @Singleton
-class IcebergTableWriterFactory(private val icebergUtil: IcebergUtil) {
+class IcebergTableWriterFactory {
+    class InvalidGenerationIdException(message: String) : Exception(message)
+
+    private val generationIdRegex = Regex("""ab-generation-id-\d+-e""")
+
+    private fun assertGenerationIdSuffixIsOfValidFormat(generationId: String) {
+        if (!generationIdRegex.matches(generationId)) {
+            throw InvalidGenerationIdException(
+                "Invalid format: $generationId. Expected format is 'ab-generation-id-<number>-e'",
+            )
+        }
+    }
+
     /**
      * Creates a new [BaseTaskWriter] based on the configuration of the destination target [Table].
      *
@@ -43,22 +55,22 @@ class IcebergTableWriterFactory(private val icebergUtil: IcebergUtil) {
         table: Table,
         generationId: String,
         importType: ImportType,
-        schema: Schema
+        schema: Schema,
     ): BaseTaskWriter<Record> {
-        icebergUtil.assertGenerationIdSuffixIsOfValidFormat(generationId)
+        assertGenerationIdSuffixIsOfValidFormat(generationId)
         val format =
             FileFormat.valueOf(
                 table
                     .properties()
                     .getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT)
-                    .uppercase()
+                    .uppercase(),
             )
         val identifierFieldIds = schema.identifierFieldIds()
-        val appenderFactory =
-            createAppenderFactory(
+        val writerFactory =
+            createWriterFactory(
                 table = table,
                 schema = schema,
-                identifierFieldIds = identifierFieldIds
+                identifierFieldIds = identifierFieldIds,
             )
         val outputFileFactory =
             createOutputFileFactory(table = table, format = format, generationId = generationId)
@@ -66,7 +78,7 @@ class IcebergTableWriterFactory(private val icebergUtil: IcebergUtil) {
             PropertyUtil.propertyAsLong(
                 table.properties(),
                 WRITE_TARGET_FILE_SIZE_BYTES,
-                WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT
+                WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT,
             )
         return when (importType) {
             is Append,
@@ -74,45 +86,46 @@ class IcebergTableWriterFactory(private val icebergUtil: IcebergUtil) {
                 newAppendWriter(
                     table = table,
                     schema = schema,
-                    appenderFactory = appenderFactory,
+                    writerFactory = writerFactory,
                     targetFileSize = targetFileSize,
                     outputFileFactory = outputFileFactory,
-                    format = format
+                    format = format,
                 )
             is Dedupe ->
                 newDeltaWriter(
                     table = table,
                     schema = schema,
                     identifierFieldIds = identifierFieldIds,
-                    appenderFactory = appenderFactory,
+                    writerFactory = writerFactory,
                     targetFileSize = targetFileSize,
                     outputFileFactory = outputFileFactory,
-                    format = format
+                    format = format,
                 )
             else -> throw IllegalArgumentException("Unsupported import type $importType")
         }
     }
 
-    private fun createAppenderFactory(
+    private fun createWriterFactory(
         table: Table,
         schema: Schema,
-        identifierFieldIds: Set<Int>?
-    ): GenericAppenderFactory {
-        return GenericAppenderFactory(
-                schema,
-                table.spec(),
-                identifierFieldIds?.toIntArray(),
-                if (identifierFieldIds != null) TypeUtil.select(schema, identifierFieldIds.toSet())
-                else null,
-                null
-            )
-            .setAll(table.properties())
+        identifierFieldIds: Set<Int>?,
+    ): GenericFileWriterFactory {
+        val builder =
+            GenericFileWriterFactory.Builder(table)
+                .dataSchema(schema)
+                .writerProperties(table.properties())
+        if (identifierFieldIds != null) {
+            builder
+                .equalityFieldIds(identifierFieldIds.toIntArray())
+                .equalityDeleteRowSchema(TypeUtil.select(schema, identifierFieldIds.toSet()))
+        }
+        return builder.build()
     }
 
     private fun createOutputFileFactory(
         table: Table,
         format: FileFormat,
-        generationId: String
+        generationId: String,
     ): OutputFileFactory {
         return OutputFileFactory.builderFor(table, 0, 1L)
             .defaultSpec(table.spec())
@@ -126,28 +139,28 @@ class IcebergTableWriterFactory(private val icebergUtil: IcebergUtil) {
         table: Table,
         schema: Schema,
         format: FileFormat,
-        appenderFactory: GenericAppenderFactory,
+        writerFactory: GenericFileWriterFactory,
         outputFileFactory: OutputFileFactory,
-        targetFileSize: Long
+        targetFileSize: Long,
     ): BaseTaskWriter<Record> {
         return if (table.spec().isUnpartitioned) {
             UnpartitionedAppendWriter(
                 spec = table.spec(),
                 format = format,
-                appenderFactory = appenderFactory,
+                writerFactory = writerFactory,
                 outputFileFactory = outputFileFactory,
                 io = table.io(),
-                targetFileSize = targetFileSize
+                targetFileSize = targetFileSize,
             )
         } else {
             PartitionedAppendWriter(
                 spec = table.spec(),
                 format = format,
-                appenderFactory = appenderFactory,
+                writerFactory = writerFactory,
                 outputFileFactory = outputFileFactory,
                 io = table.io(),
                 targetFileSize = targetFileSize,
-                schema = schema
+                schema = schema,
             )
         }
     }
@@ -156,34 +169,34 @@ class IcebergTableWriterFactory(private val icebergUtil: IcebergUtil) {
         table: Table,
         schema: Schema,
         format: FileFormat,
-        appenderFactory: GenericAppenderFactory,
+        writerFactory: GenericFileWriterFactory,
         outputFileFactory: OutputFileFactory,
         targetFileSize: Long,
-        identifierFieldIds: Set<Int>
+        identifierFieldIds: Set<Int>,
     ): BaseTaskWriter<Record> {
         return if (table.spec().isUnpartitioned) {
             UnpartitionedDeltaWriter(
                 table,
                 spec = table.spec(),
                 format = format,
-                appenderFactory = appenderFactory,
+                writerFactory = writerFactory,
                 outputFileFactory = outputFileFactory,
                 io = table.io(),
                 targetFileSize = targetFileSize,
                 schema = schema,
-                identifierFieldIds = identifierFieldIds
+                identifierFieldIds = identifierFieldIds,
             )
         } else {
             PartitionedDeltaWriter(
                 table,
                 spec = table.spec(),
                 format = format,
-                appenderFactory = appenderFactory,
+                writerFactory = writerFactory,
                 outputFileFactory = outputFileFactory,
                 io = table.io(),
                 targetFileSize = targetFileSize,
                 schema = schema,
-                identifierFieldIds = identifierFieldIds
+                identifierFieldIds = identifierFieldIds,
             )
         }
     }

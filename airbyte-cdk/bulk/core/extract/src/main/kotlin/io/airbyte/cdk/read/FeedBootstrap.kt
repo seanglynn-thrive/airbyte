@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.read
@@ -8,20 +8,19 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import io.airbyte.cdk.StreamIdentifier
 import io.airbyte.cdk.command.OpaqueStateValue
-import io.airbyte.cdk.discover.Field
+import io.airbyte.cdk.discover.EmittedField
 import io.airbyte.cdk.discover.MetaFieldDecorator
 import io.airbyte.cdk.output.DataChannelFormat
 import io.airbyte.cdk.output.DataChannelMedium
 import io.airbyte.cdk.output.OutputConsumer
 import io.airbyte.cdk.output.StandardOutputConsumer
 import io.airbyte.cdk.output.sockets.NativeRecordPayload
-import io.airbyte.cdk.output.sockets.ProtoEncoder
 import io.airbyte.cdk.output.sockets.SocketJsonOutputConsumer
 import io.airbyte.cdk.output.sockets.SocketProtobufOutputConsumer
-import io.airbyte.cdk.output.sockets.nullProtoEncoder
 import io.airbyte.cdk.output.sockets.toJson
 import io.airbyte.cdk.output.sockets.toProtobuf
-import io.airbyte.cdk.output.sockets.toProtobufEncoder
+import io.airbyte.cdk.output.sockets.valueForProtobufEncoding
+import io.airbyte.cdk.protocol.AirbyteValueProtobufEncoder
 import io.airbyte.cdk.util.Jsons
 import io.airbyte.protocol.models.v0.AirbyteMessage
 import io.airbyte.protocol.models.v0.AirbyteRecordMessage
@@ -86,7 +85,7 @@ sealed class FeedBootstrap<T : Feed>(
         }
 
     fun streamJsonSocketRecordConsumers(
-        socketJsonOutputConsumer: SocketJsonOutputConsumer
+        socketJsonOutputConsumer: SocketJsonOutputConsumer,
     ): Map<StreamIdentifier, JsonSocketEfficientStreamRecordConsumer> =
         feed.streams.associate { stream: Stream ->
             stream.id to JsonSocketEfficientStreamRecordConsumer(stream, socketJsonOutputConsumer)
@@ -108,7 +107,7 @@ sealed class FeedBootstrap<T : Feed>(
      */
     open inner class EfficientStreamRecordConsumer(
         override val stream: Stream,
-        val outputDataChannel: OutputConsumer = outputConsumer
+        val outputDataChannel: OutputConsumer = outputConsumer,
     ) : StreamRecordConsumer {
 
         override fun close() {
@@ -117,13 +116,13 @@ sealed class FeedBootstrap<T : Feed>(
 
         override fun accept(
             recordData: NativeRecordPayload,
-            changes: Map<Field, FieldValueChange>?
+            changes: Map<EmittedField, FieldValueChange>?,
         ) {
             if (changes.isNullOrEmpty()) {
                 acceptWithoutChanges(recordData.toJson())
             } else {
                 val protocolChanges: List<AirbyteRecordMessageMetaChange> =
-                    changes.map { (field: Field, fieldValueChange: FieldValueChange) ->
+                    changes.map { (field: EmittedField, fieldValueChange: FieldValueChange) ->
                         AirbyteRecordMessageMetaChange()
                             .withField(field.id)
                             .withChange(fieldValueChange.protocolChange())
@@ -135,7 +134,7 @@ sealed class FeedBootstrap<T : Feed>(
 
         private fun acceptWithoutChanges(recordData: ObjectNode) {
             synchronized(this) {
-                for ((fieldName, defaultValue) in defaultRecordData.fields()) {
+                for ((fieldName, defaultValue) in defaultRecordData.properties()) {
                     reusedRecordData.set<JsonNode>(fieldName, recordData[fieldName] ?: defaultValue)
                 }
                 outputDataChannel.accept(reusedMessageWithoutChanges)
@@ -144,10 +143,10 @@ sealed class FeedBootstrap<T : Feed>(
 
         private fun acceptWithChanges(
             recordData: ObjectNode,
-            changes: List<AirbyteRecordMessageMetaChange>
+            changes: List<AirbyteRecordMessageMetaChange>,
         ) {
             synchronized(this) {
-                for ((fieldName, defaultValue) in defaultRecordData.fields()) {
+                for ((fieldName, defaultValue) in defaultRecordData.properties()) {
                     reusedRecordData.set<JsonNode>(fieldName, recordData[fieldName] ?: defaultValue)
                 }
                 reusedRecordMeta.changes = changes
@@ -195,7 +194,7 @@ sealed class FeedBootstrap<T : Feed>(
                         .withStream(stream.name)
                         .withNamespace(stream.namespace)
                         .withEmittedAt(outputDataChannel.recordEmittedAt.toEpochMilli())
-                        .withData(reusedRecordData)
+                        .withData(reusedRecordData),
                 )
 
         private val reusedRecordMeta = AirbyteRecordMessageMeta()
@@ -209,7 +208,7 @@ sealed class FeedBootstrap<T : Feed>(
                         .withNamespace(stream.namespace)
                         .withEmittedAt(outputDataChannel.recordEmittedAt.toEpochMilli())
                         .withData(reusedRecordData)
-                        .withMeta(reusedRecordMeta)
+                        .withMeta(reusedRecordMeta),
                 )
     }
 
@@ -229,19 +228,25 @@ sealed class FeedBootstrap<T : Feed>(
         }
 
         val valueVBuilder = AirbyteValueProtobuf.newBuilder()!!
+
         override fun accept(
             recordData: NativeRecordPayload,
-            changes: Map<Field, FieldValueChange>?
+            changes: Map<EmittedField, FieldValueChange>?,
         ) {
+            // toProtobuf only overwrites the slots of the fields present in recordData, and the
+            // builder is reused from one record to the next: reset every slot to its default first,
+            // otherwise a field absent from this record keeps the previous record's value. The same
+            // goes for the meta changes set by acceptWithChanges on the previous record.
+            defaultRecordData.clearData().addAllData(defaultDataValues).clearMeta()
             if (changes.isNullOrEmpty()) {
                 acceptWithoutChanges(
-                    recordData.toProtobuf(stream.schema, defaultRecordData, valueVBuilder)
+                    recordData.toProtobuf(stream.schema, defaultRecordData, valueVBuilder),
                 )
             } else {
                 val rm = AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMeta.newBuilder()
                 val c =
                     AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMetaChange.newBuilder()
-                changes.forEach { (field: Field, fieldValueChange: FieldValueChange) ->
+                changes.forEach { (field: EmittedField, fieldValueChange: FieldValueChange) ->
                     c.clear()
                         .setField(field.id)
                         .setChange(fieldValueChange.protobufChange())
@@ -250,7 +255,7 @@ sealed class FeedBootstrap<T : Feed>(
                 }
                 acceptWithChanges(
                     recordData.toProtobuf(stream.schema, defaultRecordData, valueVBuilder),
-                    rm
+                    rm,
                 )
             }
         }
@@ -260,19 +265,19 @@ sealed class FeedBootstrap<T : Feed>(
         ) {
             synchronized(this) {
                 socketProtobufOutputConsumer.accept(
-                    reusedMessageWithoutChanges.setRecord(recordData).build()
+                    reusedMessageWithoutChanges.setRecord(recordData).build(),
                 )
             }
         }
 
         private fun acceptWithChanges(
             recordData: AirbyteRecordMessageProtobuf.Builder,
-            changes: AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMeta.Builder
+            changes: AirbyteRecordMessageMetaOuterClass.AirbyteRecordMessageMeta.Builder,
         ) {
             synchronized(this) {
                 recordData.setMeta(changes)
                 socketProtobufOutputConsumer.accept(
-                    reusedMessageWithoutChanges.setRecord(recordData).build()
+                    reusedMessageWithoutChanges.setRecord(recordData).build(),
                 )
             }
         }
@@ -294,7 +299,8 @@ sealed class FeedBootstrap<T : Feed>(
         private val defaultRecordData: AirbyteRecordMessageProtobuf.Builder =
             AirbyteRecordMessageProtobuf.newBuilder()
                 .setStreamName(stream.name)
-                .setStreamNamespace(stream.namespace)
+                // Protobuf builders reject null; a source without namespaces leaves it unset.
+                .also { builder -> stream.namespace?.let { builder.setStreamNamespace(it) } }
                 .setEmittedAtMs(socketProtobufOutputConsumer.recordEmittedAt.toEpochMilli())
                 .also { builder ->
                     socketProtobufOutputConsumer.additionalProperties["partition_id"]?.let {
@@ -307,42 +313,47 @@ sealed class FeedBootstrap<T : Feed>(
                         metaFieldDecorator.decorateRecordData(
                             timestamp =
                                 socketProtobufOutputConsumer.recordEmittedAt.atOffset(
-                                    ZoneOffset.UTC
+                                    ZoneOffset.UTC,
                                 ),
                             globalStateValue =
                                 if (precedingGlobalFeed != null)
                                     stateManager.scoped(precedingGlobalFeed).current()
                                 else null,
                             stream,
-                            decoratingFields
+                            decoratingFields,
                         )
                     }
 
                     // Unlike STDIO mode, in socket mode we always include all scehma fields
                     // Including decorating field even when it has NULL value.
-                    // This is necessary beacuse in PROTOBUF mode we don't have field names so
+                    // This is necessary because in PROTOBUF mode we don't have field names so
                     // the sorted order of fields is used to determine the field position on the
                     // other side.
+                    val encoder = AirbyteValueProtobufEncoder()
                     stream.schema
                         .sortedBy { it.id }
                         .forEach { field ->
-                            builder.addData(
-                                when {
-                                    decoratingFields.keys.contains(field.id) -> {
-                                        @Suppress("UNCHECKED_CAST")
-                                        (decoratingFields[field.id]!!
-                                                .jsonEncoder
-                                                .toProtobufEncoder() as ProtoEncoder<Any>)
-                                            .encode(
-                                                valueVBuilder.clear(),
-                                                decoratingFields[field.id]!!.fieldValue!!
-                                            )
-                                    }
-                                    else -> nullProtoEncoder.encode(valueVBuilder.clear(), true)
+                            val decodedValueForProto =
+                                decoratingFields[field.id]?.let { fve ->
+                                    valueForProtobufEncoding(fve)
                                 }
+                            builder.addData(
+                                encoder.encode(
+                                    decodedValueForProto,
+                                    field.type.airbyteSchemaType,
+                                    valueVBuilder.clear(),
+                                ),
                             )
                         }
                 }
+
+        /**
+         * The data slots of [defaultRecordData] as built above (null, or the decorating meta field
+         * values): [accept] restores them before every record because [toProtobuf] mutates the
+         * builder in place and only sets the slots of the fields present in the payload.
+         */
+        private val defaultDataValues: List<AirbyteValueProtobuf> =
+            defaultRecordData.dataList.toList()
 
         val reusedMessageWithoutChanges: AirbyteMessageProtobuf.Builder =
             AirbyteMessageProtobuf.newBuilder()
@@ -465,7 +476,7 @@ sealed class FeedBootstrap<T : Feed>(
                         dataChannelFormat,
                         dataChannelMedium,
                         bufferByteSizeThresholdForFlush,
-                        clock
+                        clock,
                     )
                 is Stream ->
                     StreamFeedBootstrap(
@@ -476,7 +487,7 @@ sealed class FeedBootstrap<T : Feed>(
                         dataChannelFormat,
                         dataChannelMedium,
                         bufferByteSizeThresholdForFlush,
-                        clock
+                        clock,
                     )
             }
     }
@@ -488,6 +499,7 @@ sealed class FeedBootstrap<T : Feed>(
  * The purpose of this interface is twofold:
  * 1. to encapsulate a performance-minded implementation behind a simple abstraction;
  * 2. to decorate the RECORD messages with
+ *
  * ```
  *    a) meta-fields in the record data, and
  *    b) field value changes and the motivating reason for these in the record metadata.
@@ -497,7 +509,8 @@ interface StreamRecordConsumer {
 
     val stream: Stream
 
-    fun accept(recordData: NativeRecordPayload, changes: Map<Field, FieldValueChange>?)
+    fun accept(recordData: NativeRecordPayload, changes: Map<EmittedField, FieldValueChange>?)
+
     fun close()
 }
 
@@ -535,7 +548,7 @@ class GlobalFeedBootstrap(
         dataChannelFormat,
         dataChannelMedium,
         bufferByteSizeThresholdForFlush,
-        clock
+        clock,
     )
 
 /** [FeedBootstrap] implementation for [Stream] feeds. */
@@ -557,5 +570,5 @@ class StreamFeedBootstrap(
         dataChannelFormat,
         dataChannelMedium,
         bufferByteSizeThresholdForFlush,
-        clock
+        clock,
     )

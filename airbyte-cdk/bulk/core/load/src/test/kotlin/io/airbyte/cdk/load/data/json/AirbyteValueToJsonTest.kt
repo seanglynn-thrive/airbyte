@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.data.json
@@ -46,10 +46,10 @@ class AirbyteValueToJsonTest {
                         ObjectValue(
                             linkedMapOf(
                                 "street" to StringValue("123 Main St"),
-                                "city" to StringValue("San Francisco")
-                            )
+                                "city" to StringValue("San Francisco"),
+                            ),
                         ),
-                )
+                ),
             )
         val jsonValue = AirbyteValueToJson().convert(airbyteValue)
         val roundTripValue = JsonToAirbyteValue().convert(jsonValue)

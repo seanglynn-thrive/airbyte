@@ -2,7 +2,7 @@ data:
   connectorSubtype: database
   connectorType: destination
   definitionId: 18081484-02a5-4662-8dba-b270b582f321
-  dockerImageTag: 0.2.40
+  dockerImageTag: 0.2.41
   dockerRepository: airbyte/destination-firebolt
   githubIssueLabel: destination-firebolt
   connectorBuildOptions:
@@ -34,4 +34,14 @@ data:
           secretStore:
             type: GSM
             alias: airbyte-connector-testing-secret-store
+  externalDocumentationUrls:
+    - title: Firebolt documentation
+      url: https://docs.firebolt.io/
+      type: api_reference
+    - title: Authentication
+      url: https://docs.firebolt.io/godocs/Overview/managing-your-organization/service-accounts.html
+      type: authentication_guide
+    - title: SQL reference
+      url: https://docs.firebolt.io/sql_reference/
+      type: sql_reference
 metadataSpecVersion: "1.0"

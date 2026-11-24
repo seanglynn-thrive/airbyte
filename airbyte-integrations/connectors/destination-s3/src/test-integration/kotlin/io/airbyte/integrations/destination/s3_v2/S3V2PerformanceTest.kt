@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.s3_v2
@@ -57,5 +57,5 @@ class S3V2JsonNoFrillsPerformanceTestSockets :
         micronautProperties = S3V2TestUtils.PERFORMANCE_TEST_MICRONAUT_PROPERTIES,
         numFilesForFileTransfer = 5,
         fileSizeMbForFileTransfer = 1024,
-        dataChannelMedium = DataChannelMedium.SOCKET
+        dataChannelMedium = DataChannelMedium.SOCKET,
     )

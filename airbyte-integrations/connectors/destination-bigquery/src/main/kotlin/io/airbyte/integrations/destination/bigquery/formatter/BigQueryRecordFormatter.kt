@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 package io.airbyte.integrations.destination.bigquery.formatter
 
@@ -86,16 +86,11 @@ class BigQueryRecordFormatter(
                     outputRecord[key] = (value.abValue as IntegerValue).value
                 else -> {
                     if (!legacyRawTablesOnly) {
-                        // if we're null, then just don't write a value into the output JSON,
-                        // so that bigquery will load a NULL value.
-                        // Otherwise, do all the type validation stuff, then write a value into
-                        // the output JSON.
+                        validateAirbyteValue(value)
                         if (value.abValue != NullValue) {
-                            // first, validate the value.
-                            validateAirbyteValue(value)
                             // then, populate the record.
-                            // Bigquery has some strict requirements for datetime / time formatting,
-                            // so handle that here.
+                            // Bigquery has some strict requirements for datetime / time
+                            // formatting, so handle that here.
                             when (value.type) {
                                 TimestampTypeWithTimezone ->
                                     outputRecord[columnNameMapping[key]!!] =
@@ -178,7 +173,7 @@ class BigQueryRecordFormatter(
                 Field.of(Meta.COLUMN_NAME_AB_LOADED_AT, StandardSQLTypeName.TIMESTAMP),
                 Field.of(Meta.COLUMN_NAME_DATA, StandardSQLTypeName.STRING),
                 Field.of(Meta.COLUMN_NAME_AB_META, StandardSQLTypeName.STRING),
-                Field.of(Meta.COLUMN_NAME_AB_GENERATION_ID, StandardSQLTypeName.INT64)
+                Field.of(Meta.COLUMN_NAME_AB_GENERATION_ID, StandardSQLTypeName.INT64),
             )
 
         // This schema defines the CSV format used for the load job. It differs from SCHEMA_V2 by
@@ -207,6 +202,7 @@ class BigQueryRecordFormatter(
                     .setMode(Field.Mode.NULLABLE)
                     .build(),
             )
+
         fun getDirectLoadSchema(
             stream: DestinationStream,
             columnNameMapping: ColumnNameMapping,
@@ -224,29 +220,33 @@ class BigQueryRecordFormatter(
 
         fun formatTimestampWithTimezone(value: EnrichedAirbyteValue): String {
             return DATETIME_WITH_TIMEZONE_FORMATTER.format(
-                (value.abValue as TimestampWithTimezoneValue).value
+                (value.abValue as TimestampWithTimezoneValue).value,
             )
         }
 
         fun formatTimestampWithoutTimezone(value: EnrichedAirbyteValue): String {
             return DATETIME_WITHOUT_TIMEZONE_FORMATTER.format(
-                (value.abValue as TimestampWithoutTimezoneValue).value
+                (value.abValue as TimestampWithoutTimezoneValue).value,
             )
         }
 
         fun formatTimeWithoutTimezone(value: EnrichedAirbyteValue): String {
             return TIME_WITHOUT_TIMEZONE_FORMATTER.format(
-                (value.abValue as TimeWithoutTimezoneValue).value
+                (value.abValue as TimeWithoutTimezoneValue).value,
             )
         }
 
         fun formatTimeWithTimezone(value: EnrichedAirbyteValue): String {
             return TIME_WITH_TIMEZONE_FORMATTER.format(
-                (value.abValue as TimeWithTimezoneValue).value
+                (value.abValue as TimeWithTimezoneValue).value,
             )
         }
 
         fun validateAirbyteValue(value: EnrichedAirbyteValue) {
+            if (value.abValue == NullValue) {
+                // Null is always valid, so just return immediately
+                return
+            }
             when (value.type) {
                 is IntegerType -> {
                     (value.abValue as IntegerValue).value.let {

@@ -2,23 +2,34 @@
 # Company vocabulary
 #
 
-Airbyte
-Airbyte's
-Self-Managed Community
-Self-Managed Enterprise
-Cloud
-Cloud Teams
-Enterprise Flex
+Airbyte('s)?
+[Cc]loud
 abctl
 Airbox
 PyAirbyte
 [Nn]amespace
+Automation Builder
 Connector Builder
+Context Store
 abctl
 Low-Code CDK
 Connection Timeline
 Embedded
 Airbyte Embedded
+Sonar
+Core
+Standard
+Plus
+Pro
+Enterprise Flex
+Self-Managed Enterprise
+Elastic License 2.0
+ELv2
+MIT
+[Aa]gent(ic)? [Oo]peration(s)?
+AO
+AOs
+SAML
 
 #
 # Common terms Airbyte uses
@@ -34,6 +45,7 @@ Vale
 OpenTelemetry
 Datadog
 [Dd]eduplication
+[Dd]eduped
 Python
 MarkDownLint
 markdownlint-cli2
@@ -42,6 +54,7 @@ ETL
 ELT
 [Dd]ata activation
 ID
+[Aa]gent(ic)?
 
 # Common acronyms and initialisms that don't need definitions
 
@@ -61,6 +74,10 @@ SSO
 SQL
 IP[s]
 CDC
+CRM[s]
+FAQ
+MCP
+Streamable
 
 # Airbyte connectors
 
@@ -68,9 +85,13 @@ Nessie
 S3 Data Lake
 PostgreSQL
 Postgres
+NetSuite
+ClickHouse
 
 # Companies, products, and jargon
 
+Gradle
+Micronaut
 Glue
 [Gg]raph[Qq][Ll]
 \bDocker(?:'s)?\b
@@ -80,6 +101,21 @@ Zendesk
 Okta
 Entra
 Slack
+Jira
+Fargate
+MinIO
+Pydantic
+LangChain
+LangGraph
+FastMCP
+Supabase
+Lovable
+Deno
+Claude
+Claude Code
+ChatGPT
+Codex
+skills.sh
 
 # Acceptable non-words that shouldn't trigger spellcheck
 
@@ -87,3 +123,63 @@ Slack
 [Nn]amespaces
 [Ii]nitialisms
 \bCPU(?:s)?\b
+\bhostname(?:s)?\b
+
+# API and technical terms
+
+[Tt]oolchain
+KDoc
+CLI
+CLIs
+UUIDs
+JWT
+JWTs
+CORS
+SaaS
+config
+rollout
+CRM
+JSON
+jmespath
+Jmespath
+JMESPath
+Cron
+crons
+subdirectory
+subdirectories
+workspace_id
+source_id
+connection_id
+template_id
+workspaceId
+sourceId
+connectionId
+templateId
+sync_on_create
+non_breaking_changes_preference
+Onboarding
+datetime
+workspace's
+
+# Never lint Docusaurus admonitions markup
+
+:::
+:::note
+:::tip
+:::info
+:::warning
+:::danger
+
+[Dd]ocstring(s)?
+expirations
+httpx
+[Aa]uto-?create(s|d)?
+async
+Automations
+enum
+
+# Agent SDK terms
+
+build_connector_tools
+[Cc]allable(s)?
+uv

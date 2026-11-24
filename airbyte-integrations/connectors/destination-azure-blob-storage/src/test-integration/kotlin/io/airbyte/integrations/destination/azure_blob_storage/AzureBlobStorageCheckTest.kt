@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.azure_blob_storage
@@ -14,10 +14,10 @@ class AzureBlobStorageCheckTest :
         successConfigFilenames =
             listOf(
                 CheckTestConfig(
-                    AzureBlobStorageTestUtil.getAccountKeyConfig(JsonFormatSpecification())
+                    AzureBlobStorageTestUtil.getAccountKeyConfig(JsonFormatSpecification()),
                 ),
                 CheckTestConfig(
-                    AzureBlobStorageTestUtil.getAccountKeyConfig(CSVFormatSpecification())
+                    AzureBlobStorageTestUtil.getAccountKeyConfig(CSVFormatSpecification()),
                 ),
                 CheckTestConfig(AzureBlobStorageTestUtil.getSasConfig(CSVFormatSpecification())),
             ),
@@ -25,7 +25,7 @@ class AzureBlobStorageCheckTest :
             mapOf(
                 CheckTestConfig(
                     AzureBlobStorageTestUtil.getInvalidConfig(CSVFormatSpecification()),
-                    name = "Bad hostname"
+                    name = "Bad hostname",
                 ) to "Server failed to authenticate the request".toPattern(),
             ),
     )

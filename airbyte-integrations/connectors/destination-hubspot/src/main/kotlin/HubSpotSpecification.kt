@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.hubspot
@@ -23,7 +23,7 @@ enum class CredentialsType(@get:JsonValue val type: String) {
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.EXISTING_PROPERTY,
-    property = "type"
+    property = "type",
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = OAuthCredentialsSpec::class, name = "OAuth"),

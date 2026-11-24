@@ -1,10 +1,9 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.integrations.destination.async
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
 import io.airbyte.cdk.integrations.destination.async.buffers.StreamAwareQueue
 import io.airbyte.cdk.integrations.destination.async.function.DestinationFlushFunction
 import io.airbyte.cdk.integrations.destination.async.state.FlushFailure
@@ -41,7 +40,6 @@ private val logger = KotlinLogging.logger {}
  * [DestinationFlushFunction.optimalBatchSizeBytes] batch from the in-memory stream and calls
  * [DestinationFlushFunction.flush] on the returned data.
  */
-@SuppressFBWarnings(value = ["NP_PARAMETER_MUST_BE_NONNULL_BUT_MARKED_AS_NULLABLE"])
 class FlushWorkers
 @JvmOverloads
 constructor(

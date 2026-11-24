@@ -69,6 +69,10 @@ The Pexels-API source connector supports the following [sync modes](https://docs
 
 Pexels-API's [API reference]https://www.pexels.com/api/documentation) has v1 at present and v2 is at development. The connector as default uses v1.
 
+## IP allow list
+
+If you use Airbyte Cloud and your organization restricts access to specific IPs, add the [Airbyte Cloud IP addresses](https://docs.airbyte.com/platform/operating-airbyte/ip-allowlist) to your allow list.
+
 ## Changelog
 
 <details>
@@ -76,7 +80,23 @@ Pexels-API's [API reference]https://www.pexels.com/api/documentation) has v1 at 
 
 | Version | Date       | Pull Request                                            | Subject        |
 | :------ | :--------- | :------------------------------------------------------ | :------------- |
-| 0.2.35 | 2025-09-30 | [66963](https://github.com/airbytehq/airbyte/pull/66963) | Update dependencies |
+| 0.2.51 | 2026-11-17 | [93319](https://github.com/airbytehq/airbyte/pull/93319) | Update dependencies |
+| 0.2.50 | 2026-11-03 | [90920](https://github.com/airbytehq/airbyte/pull/90920) | Replace single-child `CompositeErrorHandler` wrappers with their `DefaultErrorHandler`; no behavior change. |
+| 0.2.49 | 2026-11-10 | [91655](https://github.com/airbytehq/airbyte/pull/91655) | Update dependencies |
+| 0.2.48 | 2026-11-03 | [90693](https://github.com/airbytehq/airbyte/pull/90693) | Update dependencies |
+| 0.2.47 | 2026-10-27 | [90035](https://github.com/airbytehq/airbyte/pull/90035) | Update dependencies |
+| 0.2.46 | 2026-10-20 | [89342](https://github.com/airbytehq/airbyte/pull/89342) | Update dependencies |
+| 0.2.45 | 2026-10-13 | [88748](https://github.com/airbytehq/airbyte/pull/88748) | Update dependencies |
+| 0.2.44 | 2026-10-06 | [87983](https://github.com/airbytehq/airbyte/pull/87983) | Update dependencies |
+| 0.2.43 | 2026-09-29 | [87304](https://github.com/airbytehq/airbyte/pull/87304) | Update dependencies |
+| 0.2.42 | 2026-09-22 | [78868](https://github.com/airbytehq/airbyte/pull/78868) | Update dependencies |
+| 0.2.41 | 2025-11-25 | [69993](https://github.com/airbytehq/airbyte/pull/69993) | Update dependencies |
+| 0.2.40 | 2025-11-18 | [69635](https://github.com/airbytehq/airbyte/pull/69635) | Update dependencies |
+| 0.2.39 | 2025-10-29 | [68954](https://github.com/airbytehq/airbyte/pull/68954) | Update dependencies |
+| 0.2.38 | 2025-10-21 | [68267](https://github.com/airbytehq/airbyte/pull/68267) | Update dependencies |
+| 0.2.37 | 2025-10-14 | [67825](https://github.com/airbytehq/airbyte/pull/67825) | Update dependencies |
+| 0.2.36 | 2025-10-07 | [67496](https://github.com/airbytehq/airbyte/pull/67496) | Update dependencies |
+| 0.2.35 | 2025-10-01 | [66963](https://github.com/airbytehq/airbyte/pull/66963) | Update dependencies |
 | 0.2.34 | 2025-09-23 | [66413](https://github.com/airbytehq/airbyte/pull/66413) | Update dependencies |
 | 0.2.33 | 2025-09-09 | [65882](https://github.com/airbytehq/airbyte/pull/65882) | Update dependencies |
 | 0.2.32 | 2025-08-23 | [65221](https://github.com/airbytehq/airbyte/pull/65221) | Update dependencies |

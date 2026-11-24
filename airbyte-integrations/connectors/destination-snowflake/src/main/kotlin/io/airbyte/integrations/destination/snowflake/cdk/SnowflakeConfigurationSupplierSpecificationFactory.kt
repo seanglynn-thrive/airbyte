@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.snowflake.cdk
@@ -25,7 +25,7 @@ class SnowflakeConfigurationSupplierSpecificationFactory(
     override fun create(): ConnectorSpecification {
         return extendSpecification(
             ConnectorSpecification()
-                .withConnectionSpecification(configJsonObjectSupplier.jsonSchema)
+                .withConnectionSpecification(configJsonObjectSupplier.jsonSchema),
         )
     }
 }

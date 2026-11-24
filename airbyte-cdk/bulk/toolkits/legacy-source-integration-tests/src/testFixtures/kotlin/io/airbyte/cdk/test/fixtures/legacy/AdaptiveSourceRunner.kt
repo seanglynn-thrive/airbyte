@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.test.fixtures.legacy
@@ -30,7 +30,7 @@ object AdaptiveSourceRunner {
 
     class CloudSourceBuilder<OT : Source>(
         private val deploymentMode: String,
-        private val ossSourceSupplier: Supplier<OT>
+        private val ossSourceSupplier: Supplier<OT>,
     ) {
         fun <CT : Source> withCloudSource(cloudSourceSupplier: Supplier<CT>): Runner<OT, CT> {
             return Runner(deploymentMode, ossSourceSupplier, cloudSourceSupplier)
@@ -40,7 +40,7 @@ object AdaptiveSourceRunner {
     class Runner<OT : Source, CT : Source>(
         private val deploymentMode: String?,
         private val ossSourceSupplier: Supplier<OT>,
-        private val cloudSourceSupplier: Supplier<CT>
+        private val cloudSourceSupplier: Supplier<CT>,
     ) {
         private val source: Source
             get() {

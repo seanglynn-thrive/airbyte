@@ -1,12 +1,11 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.clickhouse.fixtures
 
 import io.airbyte.cdk.load.data.AirbyteType
 import io.airbyte.cdk.load.data.AirbyteValue
-import io.airbyte.cdk.load.data.DateValue
 import io.airbyte.cdk.load.data.NumberValue
 import io.airbyte.cdk.load.data.ObjectValue
 import io.airbyte.cdk.load.data.StringValue
@@ -16,9 +15,8 @@ import io.airbyte.cdk.load.data.TimestampWithTimezoneValue
 import io.airbyte.cdk.load.data.TimestampWithoutTimezoneValue
 import io.airbyte.cdk.load.test.util.ExpectedRecordMapper
 import io.airbyte.cdk.load.test.util.OutputRecord
-import io.airbyte.integrations.destination.clickhouse.config.toClickHouseCompatibleName
+import io.airbyte.integrations.destination.clickhouse.schema.toClickHouseCompatibleName
 import java.math.RoundingMode
-import java.time.LocalTime
 import java.time.ZoneOffset
 
 object ClickhouseExpectedRecordMapper : ExpectedRecordMapper {
@@ -27,7 +25,7 @@ object ClickhouseExpectedRecordMapper : ExpectedRecordMapper {
             ObjectValue(
                 expectedRecord.data.values
                     .mapValuesTo(linkedMapOf()) { (_, value) -> mapAirbyteValue(value) }
-                    .mapKeysTo(linkedMapOf()) { it.key.toClickHouseCompatibleName() }
+                    .mapKeysTo(linkedMapOf()) { it.key.toClickHouseCompatibleName() },
             )
         return expectedRecord.copy(data = mappedData)
     }
@@ -40,13 +38,9 @@ object ClickhouseExpectedRecordMapper : ExpectedRecordMapper {
                 TimestampWithTimezoneValue(value.value.atOffset(ZoneOffset.UTC))
             is TimestampWithTimezoneValue ->
                 TimestampWithTimezoneValue(value.value.withOffsetSameInstant(ZoneOffset.UTC))
-            is DateValue ->
-                TimestampWithTimezoneValue(
-                    value.value.atTime(LocalTime.MIDNIGHT).atOffset(ZoneOffset.UTC)
-                )
             is ObjectValue ->
                 ObjectValue(
-                    values = value.values.mapValuesTo(linkedMapOf()) { mapAirbyteValue(it.value) }
+                    values = value.values.mapValuesTo(linkedMapOf()) { mapAirbyteValue(it.value) },
                 )
             is NumberValue -> NumberValue(value.value.setScale(1, RoundingMode.HALF_UP))
             else -> value

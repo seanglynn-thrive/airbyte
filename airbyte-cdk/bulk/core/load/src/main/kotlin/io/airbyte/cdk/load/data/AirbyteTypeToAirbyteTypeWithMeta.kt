@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.data
@@ -27,7 +27,7 @@ class AirbyteTypeToAirbyteTypeWithMeta(private val flatten: Boolean) {
                 // Do nothing: no fields to add
             } else {
                 throw IllegalStateException(
-                    "Cannot flatten without an object schema (schema type: $schema)"
+                    "Cannot flatten without an object schema (schema type: $schema)",
                 )
             }
         } else {

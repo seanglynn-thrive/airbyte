@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.util
@@ -18,7 +18,7 @@ fun <T : Any> Map<String, T>.findIgnoreCase(target: String): T? {
     if (matchingEntries.size > 1) {
         // this should be impossible - bigquery column names are case-insensitive
         throw IllegalStateException(
-            "Found multiple matching entries for $target in $this: $matchingEntries"
+            "Found multiple matching entries for $target in $this: $matchingEntries",
         )
     }
     return matchingEntries.firstNotNullOf { it }.value
@@ -49,7 +49,7 @@ object CollectionUtils {
     @JvmStatic
     fun containsAllIgnoreCase(
         searchCollection: Collection<String>,
-        searchTerms: Collection<String>
+        searchTerms: Collection<String>,
     ): Boolean {
         require(!searchTerms.isEmpty()) {
             // There isn't a good behavior for an empty collection. Without this check, an empty
@@ -77,4 +77,14 @@ object CollectionUtils {
         }
         return Optional.ofNullable(collection.firstOrNull { it.equals(search, ignoreCase = true) })
     }
+}
+
+fun <K, V> Map<K, V>.invert(): Map<V, K> {
+    val inverted = entries.associate { (k, v) -> v to k }
+    if (inverted.size != this.size) {
+        throw IllegalArgumentException(
+            "Map is not invertible (some keys map to the same value): $this",
+        )
+    }
+    return inverted
 }

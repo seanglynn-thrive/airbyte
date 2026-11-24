@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.data.json
@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import io.airbyte.cdk.load.data.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micronaut.context.annotation.Property
-import javax.inject.Singleton
+import jakarta.inject.Singleton
 
 @Singleton
 class JsonSchemaToAirbyteType(
@@ -92,9 +92,14 @@ class JsonSchemaToAirbyteType(
                     // options is supposed to be a list, but fallback to sane behavior if it's not.
                     convertInner(options)
                 }
+            } else if (schema.has("properties") && schema is ObjectNode) {
+                // (technically `schema is ObjectNode` is implied by `schema` having any keys at
+                // all, but the smart cast lets us avoid an explicit cast)
+                // Default to object if no type and not a union type, but has properties
+                convertInner(schema.put("type", "object"))
             } else {
-                // Default to object if no type and not a union type
-                convertInner((schema as ObjectNode).put("type", "object"))
+                // Otherwise, give up
+                UnknownType(schema)
             }
         } else if (schema.isTextual) {
             // "<typename>"
@@ -153,7 +158,7 @@ class JsonSchemaToAirbyteType(
         }
         val propertiesMapped =
             properties
-                .fields()
+                .properties()
                 .asSequence()
                 .map { (name, node) -> name to nodeToFieldType(node) }
                 .toMap(LinkedHashMap())
@@ -173,20 +178,19 @@ class JsonSchemaToAirbyteType(
 
     private fun unionFromCombinedTypes(
         options: List<JsonNode>,
-        parentSchema: ObjectNode
+        parentSchema: ObjectNode,
     ): AirbyteType {
         // Denormalize the properties across each type (the converter only checks what matters
         // per type).
-        val unionOptions =
-            options.mapNotNull {
-                if (it.isTextual) {
-                    val schema = parentSchema.deepCopy()
-                    schema.put("type", it.textValue())
-                    convertInner(schema)
-                } else {
-                    convertInner(it)
-                }
+        val unionOptions = options.mapNotNull {
+            if (it.isTextual) {
+                val schema = parentSchema.deepCopy()
+                schema.put("type", it.textValue())
+                convertInner(schema)
+            } else {
+                convertInner(it)
             }
+        }
         if (unionOptions.isEmpty()) {
             return UnknownType(parentSchema)
         }

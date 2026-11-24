@@ -1,5 +1,17 @@
 # Pocket
 
+:::warning
+
+## Deprecation Notice
+
+The Pocket source connector has been archived because Mozilla shut down the Pocket service on July 8, 2025 (user data exports were available until October 8, 2025, after which all accounts were deleted). The Pocket v3 API (`https://getpocket.com/v3/get`) that this connector relies on now returns `502`/`503` ("Pocket temporarily unavailable") for every request and the developer documentation at `https://getpocket.com/developer/` is offline, so the connector cannot sync any data. It is no longer supported or available for use in Airbyte.
+
+### Recommended Actions
+
+Pocket has no successor API. If you downloaded an export of your Pocket data before October 8, 2025 (CSV/HTML), you can load it with the [File source](https://docs.airbyte.com/integrations/sources/file) or a custom connector; see the [Custom Connector documentation](https://docs.airbyte.com/connector-development/).
+
+:::
+
 ## Overview
 
 The Pocket source connector only supports full refresh syncs
@@ -50,6 +62,10 @@ curl --insecure -X POST -H 'Content-Type: application/json' -H 'X-Accept: applic
     https://getpocket.com/v3/oauth/authorize  -d '{"consumer_key":"REPLACE-ME","code":"REQUEST-TOKEN"}'
 ```
 
+## IP allow list
+
+If you use Airbyte Cloud and your organization restricts access to specific IPs, add the [Airbyte Cloud IP addresses](https://docs.airbyte.com/platform/operating-airbyte/ip-allowlist) to your allow list.
+
 ## Changelog
 
 <details>
@@ -57,8 +73,13 @@ curl --insecure -X POST -H 'Content-Type: application/json' -H 'X-Accept: applic
 
 | Version | Date       | Pull Request                                             | Subject                                                                         |
 | :------ | :--------- | :------------------------------------------------------- | :------------------------------------------------------------------------------ |
-| 0.2.33 | 2025-09-30 | [66420](https://github.com/airbytehq/airbyte/pull/66420) | Update dependencies |
-| 0.2.32 | 2025-09-09 | [65872](https://github.com/airbytehq/airbyte/pull/65872) | Update dependencies |
+| 0.2.38 | 2026-10-07 | [88322](https://github.com/airbytehq/airbyte/pull/88322) | Archive connector: Mozilla shut down the Pocket service and its v3 API on 2025-07-08 |
+| 0.2.37 | 2025-10-29 | [68933](https://github.com/airbytehq/airbyte/pull/68933) | Update dependencies |
+| 0.2.36 | 2025-10-21 | [68277](https://github.com/airbytehq/airbyte/pull/68277) | Update dependencies |
+| 0.2.35 | 2025-10-14 | [67842](https://github.com/airbytehq/airbyte/pull/67842) | Update dependencies |
+| 0.2.34 | 2025-10-07 | [67490](https://github.com/airbytehq/airbyte/pull/67490) | Update dependencies |
+| 0.2.33 | 2025-10-01 | [66420](https://github.com/airbytehq/airbyte/pull/66420) | Update dependencies |
+| 0.2.32 | 2025-09-10 | [65872](https://github.com/airbytehq/airbyte/pull/65872) | Update dependencies |
 | 0.2.31 | 2025-08-23 | [65226](https://github.com/airbytehq/airbyte/pull/65226) | Update dependencies |
 | 0.2.30 | 2025-08-09 | [64736](https://github.com/airbytehq/airbyte/pull/64736) | Update dependencies |
 | 0.2.29 | 2025-08-02 | [64252](https://github.com/airbytehq/airbyte/pull/64252) | Update dependencies |

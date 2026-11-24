@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.source.mysql
@@ -15,8 +15,7 @@ enum class MySqlSourceCdcMetaFields(
 ) : MetaField {
     CDC_CURSOR(CdcIntegerMetaFieldType),
     CDC_LOG_POS(CdcNumberMetaFieldType),
-    CDC_LOG_FILE(CdcStringMetaFieldType),
-    ;
+    CDC_LOG_FILE(CdcStringMetaFieldType);
 
     override val id: String
         get() = MetaField.META_PREFIX + name.lowercase()

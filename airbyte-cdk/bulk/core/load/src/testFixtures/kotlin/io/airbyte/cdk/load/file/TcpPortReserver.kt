@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.file
@@ -11,7 +11,7 @@ class TcpPortReserver {
     companion object {
         fun findAvailablePort(): Int {
             while (true) {
-                ServerSocket(/* port = */ 0).use { socket ->
+                ServerSocket(/* port= */ 0).use { socket ->
                     return socket.localPort
                 }
             }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.snowflake
@@ -7,24 +7,28 @@ package io.airbyte.integrations.destination.snowflake
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.airbyte.cdk.Operation
-import io.airbyte.cdk.load.check.CheckOperationV2
-import io.airbyte.cdk.load.check.DestinationCheckerV2
+import io.airbyte.cdk.fusion.FusionConfiguration
 import io.airbyte.cdk.load.config.DataChannelMedium
-import io.airbyte.cdk.load.dataflow.config.MemoryAndParallelismConfig
-import io.airbyte.cdk.load.orchestration.db.DefaultTempTableNameGenerator
-import io.airbyte.cdk.load.orchestration.db.TempTableNameGenerator
-import io.airbyte.cdk.output.OutputConsumer
+import io.airbyte.cdk.load.dataflow.config.model.AggregatePublishingConfig
+import io.airbyte.cdk.load.table.DefaultTempTableNameGenerator
+import io.airbyte.cdk.load.table.TempTableNameGenerator
 import io.airbyte.integrations.destination.snowflake.cdk.SnowflakeMigratingConfigurationSpecificationSupplier
-import io.airbyte.integrations.destination.snowflake.db.toSnowflakeCompatibleName
+import io.airbyte.integrations.destination.snowflake.copy.DisabledSnowflakeS3Copy
+import io.airbyte.integrations.destination.snowflake.copy.EnabledSnowflakeS3Copy
+import io.airbyte.integrations.destination.snowflake.copy.SnowflakeS3Copy
+import io.airbyte.integrations.destination.snowflake.schema.toSnowflakeCompatibleName
 import io.airbyte.integrations.destination.snowflake.spec.KeyPairAuthConfiguration
+import io.airbyte.integrations.destination.snowflake.spec.ProgrammaticAccessTokenAuthConfiguration
 import io.airbyte.integrations.destination.snowflake.spec.SnowflakeConfiguration
 import io.airbyte.integrations.destination.snowflake.spec.SnowflakeConfigurationFactory
 import io.airbyte.integrations.destination.snowflake.spec.UsernamePasswordAuthConfiguration
+import io.airbyte.integrations.destination.snowflake.write.load.SnowflakeRawRecordFormatter
+import io.airbyte.integrations.destination.snowflake.write.load.SnowflakeRecordFormatter
+import io.airbyte.integrations.destination.snowflake.write.load.SnowflakeSchemaRecordFormatter
+import io.airbyte.protocol.models.v0.ConfiguredAirbyteCatalog
 import io.micronaut.context.annotation.Factory
-import io.micronaut.context.annotation.Primary
 import io.micronaut.context.annotation.Requires
 import io.micronaut.context.annotation.Value
-import jakarta.inject.Named
 import jakarta.inject.Singleton
 import java.io.File
 import java.io.PrintWriter
@@ -54,10 +58,29 @@ internal const val DATA_SOURCE_PROPERTY_TRACING = "tracing"
 internal const val DATA_SOURCE_PROPERTY_WAREHOUSE = "warehouse"
 internal const val JSON_FORMAT = "JSON"
 internal const val NETWORK_TIMEOUT_MINUTES: Long = 1L
-internal const val PRIVATE_KEY_FILE_NAME: String = "rsa_key.p8"
 
 @Factory
 class SnowflakeBeanFactory {
+
+    @Singleton
+    @Requires(property = Operation.PROPERTY, value = "write")
+    fun snowflakeS3Copy(
+        columnManager: io.airbyte.integrations.destination.snowflake.schema.SnowflakeColumnManager,
+        snowflakeConfiguration: SnowflakeConfiguration,
+        configuredCatalog: ConfiguredAirbyteCatalog,
+    ): SnowflakeS3Copy {
+        return FusionConfiguration.fromEnvironment(
+                System.getenv(),
+            )
+            ?.let {
+                EnabledSnowflakeS3Copy(
+                    it,
+                    columnManager,
+                    snowflakeConfiguration,
+                    configuredCatalog = configuredCatalog,
+                )
+            } ?: DisabledSnowflakeS3Copy
+    }
 
     @Singleton
     fun tempTableNameGenerator(
@@ -86,15 +109,23 @@ class SnowflakeBeanFactory {
     fun emptySnowflakeDataSource(): DataSource {
         return object : DataSource {
             override fun getConnection(): Connection? = null
+
             override fun getConnection(username: String, password: String): Connection? =
                 getConnection()
+
             override fun getLogWriter(): PrintWriter =
                 PrintWriter(System.out.writer(StandardCharsets.UTF_8))
+
             override fun setLogWriter(out: PrintWriter) {}
+
             override fun setLoginTimeout(seconds: Int) {}
+
             override fun getLoginTimeout(): Int = 0
+
             override fun getParentLogger(): Logger = Logger.getGlobal()
+
             override fun <T : Any> unwrap(iface: Class<T>): T? = null
+
             override fun isWrapperFor(iface: Class<*>): Boolean = false
         }
     }
@@ -103,8 +134,6 @@ class SnowflakeBeanFactory {
     @Requires(property = Operation.PROPERTY, notEquals = "spec")
     fun snowflakeDataSource(
         snowflakeConfiguration: SnowflakeConfiguration,
-        @Named("snowflakePrivateKeyFileName")
-        snowflakePrivateKeyFileName: String = PRIVATE_KEY_FILE_NAME,
         @Value("\${airbyte.edition:COMMUNITY}") airbyteEdition: String,
     ): HikariDataSource {
         val snowflakeJdbcUrl =
@@ -126,20 +155,20 @@ class SnowflakeBeanFactory {
                 jdbcUrl = snowflakeJdbcUrl
                 when (snowflakeConfiguration.authType) {
                     is KeyPairAuthConfiguration -> {
-                        val privateKeyFile = File(snowflakePrivateKeyFileName)
+                        val privateKeyFile = File.createTempFile("rsa_key_", ".p8")
                         privateKeyFile.deleteOnExit()
                         privateKeyFile.writeText(
                             snowflakeConfiguration.authType.privateKey,
-                            StandardCharsets.UTF_8
+                            StandardCharsets.UTF_8,
                         )
                         addDataSourceProperty(
                             DATA_SOURCE_PROPERTY_PRIVATE_KEY_FILE,
-                            snowflakePrivateKeyFileName
+                            privateKeyFile.absolutePath,
                         )
                         snowflakeConfiguration.authType.privateKeyPassword?.let { password ->
                             addDataSourceProperty(
                                 DATA_SOURCE_PROPERTY_PRIVATE_KEY_PASSWORD,
-                                password
+                                password,
                             )
                         }
                         username = snowflakeConfiguration.username
@@ -148,28 +177,34 @@ class SnowflakeBeanFactory {
                         username = snowflakeConfiguration.username
                         password = snowflakeConfiguration.authType.password
                     }
+                    is ProgrammaticAccessTokenAuthConfiguration -> {
+                        // Snowflake accepts a programmatic access token in place of a password:
+                        // https://docs.snowflake.com/en/user-guide/programmatic-access-tokens#using-a-programmatic-access-token-as-a-password
+                        username = snowflakeConfiguration.username
+                        password = snowflakeConfiguration.authType.programmaticAccessToken
+                    }
                 }
 
                 // https://docs.snowflake.com/en/developer-guide/jdbc/jdbc-parameters#tracing
                 addDataSourceProperty(DATA_SOURCE_PROPERTY_TRACING, Level.SEVERE.name)
                 addDataSourceProperty(
                     DATA_SOURCE_PROPERTY_WAREHOUSE,
-                    snowflakeConfiguration.warehouse
+                    snowflakeConfiguration.warehouse,
                 )
                 addDataSourceProperty(
                     DATA_SOURCE_PROPERTY_DATABASE,
-                    snowflakeConfiguration.database
+                    snowflakeConfiguration.database,
                 )
                 addDataSourceProperty(DATA_SOURCE_PROPERTY_ROLE, snowflakeConfiguration.role)
                 addDataSourceProperty(
                     DATA_SOURCE_PROPERTY_SCHEMA,
-                    snowflakeConfiguration.schema.toSnowflakeCompatibleName()
+                    snowflakeConfiguration.schema.toSnowflakeCompatibleName(),
                 )
                 addDataSourceProperty(
                     DATA_SOURCE_PROPERTY_NETWORK_TIMEOUT,
                     Math.toIntExact(
-                        NETWORK_TIMEOUT_MINUTES.toDuration(DurationUnit.MINUTES).inWholeSeconds
-                    )
+                        NETWORK_TIMEOUT_MINUTES.toDuration(DurationUnit.MINUTES).inWholeSeconds,
+                    ),
                 )
                 // allows queries to contain any number of statements.
                 addDataSourceProperty(DATA_SOURCE_PROPERTY_MULTI_STATEMENT_COUNT, 0)
@@ -178,7 +213,7 @@ class SnowflakeBeanFactory {
                 // opportunities
                 addDataSourceProperty(
                     DATA_SOURCE_PROPERTY_APPLICATION,
-                    "airbyte_${airbyteEdition.lowercase()}"
+                    "airbyte_${airbyteEdition.lowercase()}",
                 )
                 // Needed for JDK17 - see
                 // https://stackoverflow.com/questions/67409650/snowflake-jdbc-driver-internal-error-fail-to-retrieve-row-count-for-first-arrow
@@ -193,34 +228,31 @@ class SnowflakeBeanFactory {
     }
 
     @Singleton
-    @Named("snowflakePrivateKeyFileName")
-    fun snowflakePrivateKeyFileName() = PRIVATE_KEY_FILE_NAME
+    fun snowflakeRecordFormatter(
+        snowflakeConfiguration: SnowflakeConfiguration,
+    ): SnowflakeRecordFormatter {
+        return if (snowflakeConfiguration.legacyRawTablesOnly) {
+            SnowflakeRawRecordFormatter()
+        } else {
+            SnowflakeSchemaRecordFormatter()
+        }
+    }
 
-    @Primary
     @Singleton
-    @Requires(property = Operation.PROPERTY, value = "check")
-    fun checkOperation(
-        destinationChecker: DestinationCheckerV2,
-        outputConsumer: OutputConsumer,
-    ) = CheckOperationV2(destinationChecker, outputConsumer)
-
-    @Singleton
-    fun getMemoryAndParallelismConfig(
-        dataChannelMedium: DataChannelMedium
-    ): MemoryAndParallelismConfig {
+    fun aggregatePublishingConfig(dataChannelMedium: DataChannelMedium): AggregatePublishingConfig {
         // NOT speed mode
         return if (dataChannelMedium == DataChannelMedium.STDIO) {
-            MemoryAndParallelismConfig(
+            AggregatePublishingConfig(
                 maxRecordsPerAgg = 10_000_000_000_000L,
                 maxEstBytesPerAgg = 350_000_000L,
+                maxEstBytesAllAggregates = 350_000_000L * 5,
             )
         } else {
-            MemoryAndParallelismConfig(
+            AggregatePublishingConfig(
                 maxRecordsPerAgg = 10_000_000_000_000L,
                 maxEstBytesPerAgg = 350_000_000L,
+                maxEstBytesAllAggregates = 350_000_000L * 5,
                 maxBufferedAggregates = 6,
-                maxOpenAggregates = 8,
-                maxConcurrentLifecycleOperations = 10
             )
         }
     }

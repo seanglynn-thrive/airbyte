@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 package io.airbyte.cdk.test.fixtures.legacy
 
@@ -22,7 +22,7 @@ interface JdbcCompatibleSourceOperations<SourceType> : SourceOperations<ResultSe
         preparedStatement: PreparedStatement,
         parameterIndex: Int,
         cursorFieldType: SourceType?,
-        value: String?
+        value: String?,
     )
 
     /** Determine the database specific type of the input field based on its column metadata. */
@@ -33,6 +33,7 @@ interface JdbcCompatibleSourceOperations<SourceType> : SourceOperations<ResultSe
      *
      * @param type
      * - table field type that should be checked
+     *
      * @return true is field type can be used as cursor field for incremental sync
      */
     fun isCursorType(type: SourceType?): Boolean

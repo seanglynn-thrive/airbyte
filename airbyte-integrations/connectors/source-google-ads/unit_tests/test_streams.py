@@ -7,8 +7,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 from google.ads.googleads.errors import GoogleAdsException
-from google.ads.googleads.v20.errors.types.errors import ErrorCode, GoogleAdsError, GoogleAdsFailure
-from google.ads.googleads.v20.errors.types.request_error import RequestErrorEnum
+from google.ads.googleads.v23.errors.types.errors import ErrorCode, GoogleAdsError, GoogleAdsFailure
+from google.ads.googleads.v23.errors.types.request_error import RequestErrorEnum
 from google.api_core.exceptions import (
     DataLoss,
     InternalServerError,
@@ -116,7 +116,6 @@ class MockGoogleAdsFailsOneDate(MockGoogleAds):
         return mock_response_fails_one_date()
 
 
-@patch.object(SourceGoogleAds, "get_customers", return_value=[])
 def test_read_records_unauthenticated(mocker, customers, config):
     credentials = config["credentials"]
     api = GoogleAds(credentials=credentials)

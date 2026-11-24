@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.snowflake.cdk
@@ -24,8 +24,8 @@ internal const val AUTH_TYPE_PROPERTY = "\"auth_type\""
 internal const val CREDENTIALS_PROPERTY = "\"credentials\""
 internal const val PASSWORD_PROPERTY = "\"password\""
 
-internal val CREDENTIALS_REGEX = "$CREDENTIALS_PROPERTY\\s*:\\s*\\{\\s*([^}]*)".toRegex()
-internal val PASSWORD_REGEX = "$PASSWORD_PROPERTY\\s*:\\s*\"([^\"}]*)".toRegex()
+internal val CREDENTIALS_REGEX = """$CREDENTIALS_PROPERTY\s*:\s*\{\s*([^}]*)""".toRegex()
+internal val PASSWORD_REGEX = """$PASSWORD_PROPERTY\s*:\s*"([^"}]*)""".toRegex()
 
 private val logger = KotlinLogging.logger {}
 
@@ -52,10 +52,11 @@ internal fun migrationMissingAuthType(json: String): String {
             else CredentialsSpecification.Type.PRIVATE_KEY.authTypeName
         json.replace(
             CREDENTIALS_REGEX,
-            "$CREDENTIALS_PROPERTY:{$AUTH_TYPE_PROPERTY:\"$authType\",$credentials}"
+            Regex.escapeReplacement(
+                "$CREDENTIALS_PROPERTY:{$AUTH_TYPE_PROPERTY:\"$authType\",$credentials}",
+            ),
         )
-    }
-        ?: json
+    } ?: json
 }
 
 internal fun migrateRootLevelPassword(json: String): String {
@@ -68,23 +69,22 @@ internal fun migrateRootLevelPassword(json: String): String {
         json
             .replace(
                 PASSWORD_REGEX,
-                "$CREDENTIALS_PROPERTY:{$AUTH_TYPE_PROPERTY:\"${CredentialsSpecification.Type.USERNAME_PASSWORD.authTypeName}\",$PASSWORD_PROPERTY:\"$password\"}"
+                "$CREDENTIALS_PROPERTY:{$AUTH_TYPE_PROPERTY:\"${CredentialsSpecification.Type.USERNAME_PASSWORD.authTypeName}\",$PASSWORD_PROPERTY:\"$password\"}",
             )
             .replace("}\"", "}")
-    }
-        ?: json
+    } ?: json
 }
+
 /**
  * This is a custom override of the [ConfigurationSpecificationSupplier] in the CDK in order to
  * handle multiple types of legacy configurations for the Snowflake destination and coerce them into
  * the current configuration that is strongly typed/validated. This implementation handles two
  * specific legacy cases:
- *
  * <ol>
  * ```
- *     <li>Configuration with the <code>password</code> field at the top level of the configuration JSON document/li>
- *     <li>Configuration with a credentials block without an <code>auth_type</code> property</li>
- * ```
+ * <li>Configuration with the <code>password</code> field at the top level of the configuration JSON
+ *   document/li>
+ * <li>Configuration with a credentials block without an <code>auth_type</code> property</li> ```
  * </ol>
  *
  * In both cases, this implementation attempts to find and extract the data listed above and convert
@@ -109,7 +109,7 @@ class SnowflakeMigratingConfigurationSpecificationSupplier(
                 Jsons.writeValueAsString(SnowflakeSpecification())
             } catch (_: Exception) {
                 throw ConfigErrorException(
-                    "failed to serialize fallback instance for $specificationJavaClass"
+                    "failed to serialize fallback instance for $specificationJavaClass",
                 )
             }
         }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2024 Airbyte, Inc., all rights reserved. */
+/* Copyright (c) 2026 Airbyte, Inc., all rights reserved. */
 package io.airbyte.cdk
 
 import io.airbyte.cdk.command.ConnectorCommandLinePropertySource
@@ -41,7 +41,7 @@ class AirbyteSourceRunner(
         additionalMicronautEnvs,
         systemEnv,
         micronautProperties = emptyMap(),
-        testBeanDefinitions
+        testBeanDefinitions,
     ) {
     companion object {
         @JvmStatic
@@ -68,7 +68,7 @@ class AirbyteDestinationRunner(
         additionalMicronautEnvs,
         systemEnv,
         micronautProperties,
-        testBeanDefinitions
+        testBeanDefinitions,
     ) {
     companion object {
         @JvmStatic
@@ -113,10 +113,10 @@ sealed class AirbyteConnectorRunner(
         val additionalPropertiesSource =
             MapPropertySource("additional_properties", micronautProperties)
         val ctx: ApplicationContext =
-        // note that we put the override envs last.
-        // This ensures that micronaut gives those environments precedence
-        // (because the last environment's application-XYZ.yaml wins).
-        ApplicationContext.builder(R::class.java, *envs, CONNECTOR_OVERRIDE_ENV)
+            // note that we put the override envs last.
+            // This ensures that micronaut gives those environments precedence
+            // (because the last environment's application-XYZ.yaml wins).
+            ApplicationContext.builder(R::class.java, *envs, CONNECTOR_OVERRIDE_ENV)
                 .propertySources(
                     *listOfNotNull(
                             airbytePropertySource,

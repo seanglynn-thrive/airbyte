@@ -1,10 +1,9 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.mssql.v2
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
 import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.file.azureBlobStorage.AzureBlobClient
 import io.airbyte.cdk.load.state.StreamProcessingFailed
@@ -12,7 +11,6 @@ import io.airbyte.cdk.load.write.StreamStateStore
 import javax.sql.DataSource
 import kotlinx.coroutines.runBlocking
 
-@SuppressFBWarnings("NP_NONNULL_PARAM_VIOLATION")
 class MSSQLBulkLoadStreamLoader(
     override val stream: DestinationStream,
     dataSource: DataSource,
@@ -71,10 +69,10 @@ sealed interface MSSQLStreamState {
 
 data class MSSQLBulkLoaderStreamState(
     override val dataSource: DataSource,
-    val formatFilePath: String
+    val formatFilePath: String,
 ) : MSSQLStreamState
 
 data class MSSQLDirectLoaderStreamState(
     override val dataSource: DataSource,
-    val sqlBuilder: MSSQLQueryBuilder
+    val sqlBuilder: MSSQLQueryBuilder,
 ) : MSSQLStreamState

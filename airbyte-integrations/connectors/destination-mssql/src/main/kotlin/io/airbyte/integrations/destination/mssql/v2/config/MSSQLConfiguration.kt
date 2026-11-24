@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.mssql.v2.config
@@ -59,7 +59,7 @@ class MSSQLConfigurationFactory(private val featureFlags: Set<FeatureFlag>) :
 
     fun makeWithOverrides(
         spec: MSSQLSpecification,
-        overrides: Map<String, String> = emptyMap()
+        overrides: Map<String, String> = emptyMap(),
     ): MSSQLConfiguration {
         return MSSQLConfiguration(
             host = overrides.getOrDefault("host", spec.host),
@@ -71,7 +71,7 @@ class MSSQLConfigurationFactory(private val featureFlags: Set<FeatureFlag>) :
             jdbcUrlParams = overrides.getOrDefault("jdbcUrlParams", spec.jdbcUrlParams),
             sslMethod = spec.sslMethod,
             mssqlLoadTypeConfiguration = spec.toLoadConfiguration(),
-            ssh = spec.tunnelMethodJson
+            ssh = spec.tunnelMethodJson,
         )
     }
 }

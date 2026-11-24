@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.snowflake.write.load
@@ -9,34 +9,48 @@ import de.siegmar.fastcsv.writer.CsvWriter
 import de.siegmar.fastcsv.writer.LineDelimiter
 import de.siegmar.fastcsv.writer.QuoteStrategies
 import io.airbyte.cdk.load.data.AirbyteValue
-import io.airbyte.cdk.load.orchestration.db.TableName
+import io.airbyte.cdk.load.schema.model.ColumnSchema
+import io.airbyte.cdk.load.schema.model.TableName
 import io.airbyte.integrations.destination.snowflake.client.SnowflakeAirbyteClient
+import io.airbyte.integrations.destination.snowflake.copy.CsvCopyContext
+import io.airbyte.integrations.destination.snowflake.copy.DisabledSnowflakeS3Copy
+import io.airbyte.integrations.destination.snowflake.copy.SnowflakeS3Copy
+import io.airbyte.integrations.destination.snowflake.schema.SnowflakeColumnManager
 import io.airbyte.integrations.destination.snowflake.spec.SnowflakeConfiguration
 import io.airbyte.integrations.destination.snowflake.sql.QUOTE
-import io.airbyte.integrations.destination.snowflake.sql.SnowflakeColumnUtils
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.File
+import java.io.OutputStream
 import java.nio.file.Path
 import java.util.zip.GZIPOutputStream
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.pathString
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 private val logger = KotlinLogging.logger {}
 
+internal const val CSV_FILE_EXTENSION = ".csv"
 internal const val CSV_FIELD_SEPARATOR = ','
 internal const val CSV_QUOTE_CHARACTER = '"'
 internal val CSV_LINE_DELIMITER = LineDelimiter.LF
 internal const val DEFAULT_FLUSH_LIMIT = 1000
+internal const val FILE_PREFIX = "snowflake"
+internal const val FILE_SUFFIX = ".gz"
 
 private const val CSV_WRITER_BUFFER_SIZE = 1024 * 1024 // 1 MB
 
 class SnowflakeInsertBuffer(
     private val tableName: TableName,
-    val columns: List<String>,
     private val snowflakeClient: SnowflakeAirbyteClient,
     val snowflakeConfiguration: SnowflakeConfiguration,
-    private val snowflakeColumnUtils: SnowflakeColumnUtils,
+    val columnSchema: ColumnSchema,
+    private val columnManager: SnowflakeColumnManager,
+    private val snowflakeRecordFormatter: SnowflakeRecordFormatter,
     private val flushLimit: Int = DEFAULT_FLUSH_LIMIT,
+    private val s3Copy: SnowflakeS3Copy = DisabledSnowflakeS3Copy,
+    private val copyContext: CsvCopyContext? = null,
 ) {
 
     @VisibleForTesting internal var csvFilePath: Path? = null
@@ -53,17 +67,14 @@ class SnowflakeInsertBuffer(
             .lineDelimiter(CSV_LINE_DELIMITER)
             .quoteStrategy(QuoteStrategies.REQUIRED)
 
-    private val snowflakeRecordFormatter: SnowflakeRecordFormatter =
-        when (snowflakeConfiguration.legacyRawTablesOnly) {
-            true -> SnowflakeRawRecordFormatter(columns, snowflakeColumnUtils)
-            else -> SnowflakeSchemaRecordFormatter(columns, snowflakeColumnUtils)
-        }
-
     fun accumulate(recordFields: Map<String, AirbyteValue>) {
         if (csvFilePath == null) {
             val csvFile = createCsvFile()
             csvFilePath = csvFile.toPath()
-            csvWriter = csvWriterBuilder.build(GZIPOutputStream(csvFile.outputStream()))
+            csvWriter =
+                csvWriterBuilder.build(
+                    CompressionOutputStream(outputStream = csvFile.outputStream(), level = 5),
+                )
         }
 
         writeToCsvFile(recordFields)
@@ -76,13 +87,37 @@ class SnowflakeInsertBuffer(
                 // to the file AND that any proper end of file markers are written by the close
                 csvWriter?.flush()
                 csvWriter?.close()
-                logger.info { "Beginning insert into ${tableName.toPrettyString(quote = QUOTE)}" }
-                // Next, put the CSV file into the staging table
-                snowflakeClient.putInStage(tableName, filePath.pathString)
-                // Finally, copy the data from the staging table to the final table
-                snowflakeClient.copyFromStage(tableName, filePath.fileName.toString())
                 logger.info {
-                    "Finished insert of $recordCount row(s) into ${tableName.toPrettyString(quote = QUOTE)}"
+                    "Beginning insert into ${tableName.toPrettyString(quote = QUOTE)}..."
+                }
+                val context = copyContext
+                if (context == null) {
+                    putAndCopy(filePath)
+                } else {
+                    // PUT/COPY stays in the calling coroutine so the caller's dispatcher (e.g. the
+                    // CDK's bounded final-flush dispatcher) keeps limiting concurrent use of the
+                    // Snowflake connection pool. Only the Fusion S3 upload runs alongside it. The
+                    // upload blocks uncancellably once started, so it is always awaited rather than
+                    // cancelled: the file must outlive its reader either way.
+                    coroutineScope {
+                        val archive =
+                            async(Dispatchers.IO) { s3Copy.upload(filePath, context, recordCount) }
+                        var failure: Throwable? = null
+                        try {
+                            putAndCopy(filePath)
+                        } catch (t: Throwable) {
+                            failure = t
+                        }
+                        try {
+                            archive.await()
+                        } catch (t: Throwable) {
+                            if (failure == null) failure = t else failure.addSuppressed(t)
+                        }
+                        failure?.let { throw it }
+                    }
+                }
+                logger.info {
+                    "Finished insert of $recordCount row(s) into ${tableName.toPrettyString(quote = QUOTE)}."
                 }
             } catch (e: Exception) {
                 logger.error(e) { "Unable to flush accumulated data." }
@@ -93,23 +128,41 @@ class SnowflakeInsertBuffer(
                 csvFilePath = null
                 recordCount = 0
             }
-        }
-            ?: logger.warn { "CSV file path is not set: nothing to upload to staging." }
+        } ?: logger.warn { "CSV file path is not set: nothing to upload to staging." }
+    }
+
+    private fun putAndCopy(filePath: Path) {
+        snowflakeClient.putInStage(tableName, filePath.pathString)
+        logger.info { "Copying staging data into ${tableName.toPrettyString(quote = QUOTE)}..." }
+        snowflakeClient.copyFromStage(
+            tableName,
+            filePath.fileName.toString(),
+            columnManager.getTableColumnNames(columnSchema),
+        )
     }
 
     private fun createCsvFile(): File {
-        val csvFile = File.createTempFile("snowflake", ".csv.gz")
+        val csvFile = File.createTempFile(FILE_PREFIX, "$CSV_FILE_EXTENSION$FILE_SUFFIX")
         csvFile.deleteOnExit()
         return csvFile
     }
 
     private fun writeToCsvFile(record: Map<String, AirbyteValue>) {
         csvWriter?.let {
-            it.writeRecord(snowflakeRecordFormatter.format(record).map { col -> col.toString() })
+            it.writeRecord(
+                snowflakeRecordFormatter.format(record, columnSchema).map { col -> col.toString() },
+            )
             recordCount++
             if ((recordCount % flushLimit) == 0) {
                 it.flush()
             }
+        }
+    }
+
+    private class CompressionOutputStream(outputStream: OutputStream, level: Int) :
+        GZIPOutputStream(outputStream) {
+        init {
+            def.setLevel(level)
         }
     }
 }

@@ -7,7 +7,7 @@ data:
   connectorSubtype: database
   connectorType: destination
   definitionId: de8c3498-80d9-468b-88a1-d4ebb729c3f6
-  dockerImageTag: 0.1.0
+  dockerImageTag: 0.1.2
   dockerRepository: airbyte/destination-surrealdb
   githubIssueLabel: destination-surrealdb
   icon: icon.svg
@@ -20,7 +20,7 @@ data:
       enabled: true
   releaseStage: alpha
   releases:
-    breakingChanges: []
+    breakingChanges: {}
   remoteRegistries:
     pypi:
       enabled: false
@@ -45,6 +45,11 @@ data:
   supportLevel: community
   connectorTestSuitesOptions:
     - suite: unitTests
-    # - suite: integrationTests
-    # - suite: acceptanceTests
+  externalDocumentationUrls:
+    - title: SurrealDB documentation
+      url: https://surrealdb.com/docs
+      type: api_reference
+    - title: Authentication
+      url: https://surrealdb.com/docs/surrealdb/security/authentication
+      type: authentication_guide
 metadataSpecVersion: "1.0"

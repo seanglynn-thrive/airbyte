@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.customerio.batch
@@ -32,8 +32,8 @@ class PersonIdentifyBatchEntryAssemblerTest {
                 aRecord(
                     Jsons.objectNode()
                         .put("person_email", "person@email.com")
-                        .put("an_attribute", 123)
-                )
+                        .put("an_attribute", 123),
+                ),
             )
 
         assertEquals(
@@ -49,9 +49,10 @@ class PersonIdentifyBatchEntryAssemblerTest {
                     "an_attribute": 123
                   }
                 }
-            """.trimIndent()
+                """
+                    .trimIndent(),
             ),
-            entry
+            entry,
         )
     }
 
@@ -69,7 +70,7 @@ class PersonIdentifyBatchEntryAssemblerTest {
             stream = mockk(relaxed = true),
             rawData = rawData,
             serializedSizeBytes = "serialized".length.toLong(),
-            airbyteRawId = UUID.randomUUID()
+            airbyteRawId = UUID.randomUUID(),
         )
     }
 }

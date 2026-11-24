@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.clickhouse.model
@@ -10,6 +10,7 @@ data class AlterationSummary(
     val deleted: Set<String>,
     val hasDedupChange: Boolean,
 )
+
 /**
  * This indicates if any changes were made to the table, excluding PK changes It indicates that we
  * need to run an alter statement.

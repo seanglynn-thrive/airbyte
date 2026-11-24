@@ -13,11 +13,11 @@ data:
       enabled: false
       packageName: airbyte-source-bunny-inc
   connectorBuildOptions:
-    baseImage: docker.io/airbyte/source-declarative-manifest:7.2.2@sha256:588e3aaeae219b31b47da458972e559556e3501c6b6ab9f858ff83e6c8f6dc7a
+    baseImage: docker.io/airbyte/source-declarative-manifest:7.49.0@sha256:349bbed19f7f62315db4f04d87e2b0b52f9fd4b1131d78d6a981db1681d627ad
   connectorSubtype: api
   connectorType: source
   definitionId: 6aa362e3-6107-4fdc-9209-130a60e8725c
-  dockerImageTag: 0.0.27
+  dockerImageTag: 0.0.64
   dockerRepository: airbyte/source-bunny-inc
   githubIssueLabel: source-bunny-inc
   icon: icon.svg
@@ -33,3 +33,10 @@ data:
   ab_internal:
     ql: 100
     sl: 100
+  externalDocumentationUrls:
+    - title: Bunny GraphQL API reference
+      url: https://docs.bunny.com/developer/api-reference/queries
+      type: api_reference
+    - title: Bunny API authentication
+      url: https://docs.bunny.com/developer/using-the-graphql-api/authorizing-api-requests
+      type: authentication_guide

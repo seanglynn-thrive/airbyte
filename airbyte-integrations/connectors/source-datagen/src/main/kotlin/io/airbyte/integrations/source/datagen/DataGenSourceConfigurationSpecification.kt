@@ -1,4 +1,4 @@
-/* Copyright (c) 2024 Airbyte, Inc., all rights reserved. */
+/* Copyright (c) 2026 Airbyte, Inc., all rights reserved. */
 package io.airbyte.integrations.source.datagen
 
 import com.fasterxml.jackson.annotation.JsonGetter
@@ -32,22 +32,22 @@ class DataGenSourceConfigurationSpecification : ConfigurationSpecification() {
     }
 
     @JsonGetter("flavor")
-    @JsonSchemaTitle("Data Generation Flavors")
+    @JsonSchemaTitle("Data Generation Type")
     @JsonSchemaDescription("Different patterns for generating data")
-    @JsonSchemaInject(json = """{"default":"incremental","display_type":"radio"}""")
+    @JsonSchemaInject(json = """{"default":"increment","display_type":"radio"}""")
     fun getFlavor(): FlavorSpec = flavorJson ?: flavorInternal
 
     @JsonProperty("concurrency")
     @JsonSchemaTitle("Max Concurrency")
     @JsonSchemaDescription(
-        "Maximum number of concurrent data generators. Leave empty to let Airbyte optimize performance."
+        "Maximum number of concurrent data generators. Leave empty to let Airbyte optimize performance.",
     )
     var concurrency: Int? = null
 
     @JsonProperty("max_records")
     @JsonSchemaTitle("Max Record")
     @JsonSchemaDescription(
-        "The number of record messages to emit from this connector. Min 1. Max 100 billion."
+        "The number of record messages to emit from this connector. Min 1. Max 100 billion.",
     )
     @JsonSchemaInject(json = """{"default":"100"}""")
     var maxRecords: Long = 100
@@ -55,7 +55,9 @@ class DataGenSourceConfigurationSpecification : ConfigurationSpecification() {
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "data_type")
 @JsonSubTypes(
-    JsonSubTypes.Type(value = Incremental::class, name = "incremental"),
+    JsonSubTypes.Type(value = Incremental::class, name = "increment"),
+    JsonSubTypes.Type(value = Types::class, name = "types"),
+    JsonSubTypes.Type(value = Wide::class, name = "wide"),
 )
 @JsonSchemaTitle("Data Type")
 @JsonSchemaDescription("Configures what kind of data is generated for the source.")
@@ -66,3 +68,23 @@ sealed interface FlavorSpec
     "Generates incrementally increasing numerical data for the source.",
 )
 data object Incremental : FlavorSpec
+
+@JsonSchemaTitle("All Types")
+@JsonSchemaDescription(
+    "Generates one column of each Airbyte data type.",
+)
+data object Types : FlavorSpec
+
+@JsonSchemaTitle("Wide")
+@JsonSchemaDescription(
+    "Generates a wide schema with a configurable number of columns using a mix of Airbyte data types.",
+)
+data class Wide(
+    @JsonProperty("column_count")
+    @JsonSchemaTitle("Column Count")
+    @JsonSchemaDescription(
+        "Number of columns to generate (including the id column). Min 1. Max 1000.",
+    )
+    @JsonSchemaInject(json = """{"default":50,"minimum":1,"maximum":1000}""")
+    val columnCount: Int = 50,
+) : FlavorSpec

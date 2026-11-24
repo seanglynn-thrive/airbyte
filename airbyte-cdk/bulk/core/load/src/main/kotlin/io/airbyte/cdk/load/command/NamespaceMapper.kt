@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.command
@@ -34,7 +34,9 @@ class NamespaceMapper(
 
     private data class Key(val ns: String?, val name: String) {
         private val hc: Int = 31 * (ns?.hashCode() ?: 0) + name.hashCode()
+
         override fun hashCode() = hc
+
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
             if (javaClass != other?.javaClass) return false

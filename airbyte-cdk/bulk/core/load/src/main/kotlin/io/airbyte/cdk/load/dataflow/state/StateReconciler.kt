@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.state
@@ -32,14 +32,13 @@ class StateReconciler(
     private lateinit var job: Job
 
     fun run() {
-        job =
-            scope.launch {
-                while (true) {
-                    delay(interval)
-                    flushCompleteStates()
-                    flushEmittedStats()
-                }
+        job = scope.launch {
+            while (true) {
+                delay(interval)
+                flushCompleteStates()
+                flushEmittedStats()
             }
+        }
     }
 
     fun flushCompleteStates() {

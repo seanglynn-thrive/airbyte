@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.test.util
@@ -9,6 +9,7 @@ interface ConfigurationUpdater {
 
     /**
      * May modify one or more entry in the provided configuration.
+     *
      * @param config The connector configuration.
      * @return The potentially modified configuration.
      */
@@ -32,8 +33,9 @@ data class DefaultNamespaceResult(val updatedConfig: String, val actualDefaultNa
  */
 object FakeConfigurationUpdater : ConfigurationUpdater {
     override fun update(config: String): String = config
+
     override fun setDefaultNamespace(
         config: String,
-        defaultNamespace: String
+        defaultNamespace: String,
     ): DefaultNamespaceResult = DefaultNamespaceResult(config, null)
 }

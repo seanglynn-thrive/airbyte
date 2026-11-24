@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.mssql.v2.config
@@ -63,7 +63,7 @@ internal class DataSourceFactoryTest {
             EncryptedVerify(
                 trustStoreName = "name",
                 trustStorePassword = "password",
-                hostNameInCertificate = "cert-host"
+                hostNameInCertificate = "cert-host",
             )
         val config = Fixtures.defaultConfig.copy(sslMethod = sslMethod)
         val dataSource = config.toSQLServerDataSource()

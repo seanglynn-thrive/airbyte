@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.data.json
@@ -32,7 +32,7 @@ class JsonToAirbyteValue {
                 ObjectValue(
                     (json as ObjectNode).properties().associateTo(linkedMapOf()) { (k, v) ->
                         k to convert(v)
-                    }
+                    },
                 )
             JsonNodeType.POJO,
             JsonNodeType.BINARY ->

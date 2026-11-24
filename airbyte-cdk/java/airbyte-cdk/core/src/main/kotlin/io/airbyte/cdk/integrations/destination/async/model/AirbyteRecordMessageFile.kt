@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.integrations.destination.async.model
@@ -12,7 +12,7 @@ class AirbyteRecordMessageFile {
         bytes: Long? = null,
         fileRelativePath: String? = null,
         modified: Long? = null,
-        sourceFileUrl: String? = null
+        sourceFileUrl: String? = null,
     ) {
         this.fileUrl = fileUrl
         this.bytes = bytes
@@ -20,13 +20,14 @@ class AirbyteRecordMessageFile {
         this.modified = modified
         this.sourceFileUrl = sourceFileUrl
     }
+
     constructor() :
         this(
             fileUrl = null,
             bytes = null,
             fileRelativePath = null,
             modified = null,
-            sourceFileUrl = null
+            sourceFileUrl = null,
         )
 
     @get:JsonProperty("file_url")

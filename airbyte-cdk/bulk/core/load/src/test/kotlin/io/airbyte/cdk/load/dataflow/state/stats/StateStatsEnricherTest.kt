@@ -1,11 +1,12 @@
 /*
- * Copyright (c) 2025 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.dataflow.state.stats
 
 import io.airbyte.cdk.load.command.DestinationStream
 import io.airbyte.cdk.load.command.NamespaceMapper
+import io.airbyte.cdk.load.dataflow.state.AdditionalStatsHistogram
 import io.airbyte.cdk.load.dataflow.state.PartitionKey
 import io.airbyte.cdk.load.dataflow.state.StateKey
 import io.airbyte.cdk.load.message.CheckpointMessage
@@ -29,11 +30,18 @@ class StateStatsEnricherTest {
 
     @MockK private lateinit var namespaceMapper: NamespaceMapper
 
+    @MockK private lateinit var stateAdditionalStatsStore: StateAdditionalStatsStore
+
     private lateinit var stateStatsEnricher: StateStatsEnricher
 
     @BeforeEach
     fun setUp() {
-        stateStatsEnricher = StateStatsEnricher(statsStore, namespaceMapper)
+        every { stateAdditionalStatsStore.drain(any()) } returns
+            emptyMap<DestinationStream.Descriptor, AdditionalStatsHistogram>().withDefault {
+                AdditionalStatsHistogram()
+            }
+        stateStatsEnricher =
+            StateStatsEnricher(statsStore, namespaceMapper, stateAdditionalStatsStore)
     }
 
     @Test
@@ -45,19 +53,19 @@ class StateStatsEnricherTest {
             CheckpointMessage.Checkpoint(
                 unmappedNamespace = unmappedNamespace,
                 unmappedName = unmappedName,
-                state = null
+                state = null,
             )
         val streamCheckpoint =
             StreamCheckpoint(
                 checkpoint = checkpoint,
                 sourceStats = CheckpointMessage.Stats(recordCount = 100),
-                serializedSizeBytes = 1024
+                serializedSizeBytes = 1024,
             )
         val stateKey = StateKey(id = 1L, partitionKeys = listOf(PartitionKey(Fixtures.PARTITION1)))
         val commitStatsResult =
             CommitStatsResult(
                 committedStats = EmissionStats(count = 50, bytes = 500),
-                cumulativeStats = EmissionStats(count = 150, bytes = 1500)
+                cumulativeStats = EmissionStats(count = 150, bytes = 1500),
             )
 
         every { namespaceMapper.map(unmappedNamespace, unmappedName) } returns mappedDescriptor
@@ -80,13 +88,13 @@ class StateStatsEnricherTest {
             CheckpointMessage.Checkpoint(
                 unmappedNamespace = Fixtures.NAMESPACE1,
                 unmappedName = Fixtures.NAME1,
-                state = null
+                state = null,
             )
         val checkpoint2 =
             CheckpointMessage.Checkpoint(
                 unmappedNamespace = Fixtures.NAMESPACE2,
                 unmappedName = Fixtures.NAME2,
-                state = null
+                state = null,
             )
         val globalCheckpoint =
             GlobalCheckpoint(
@@ -94,13 +102,13 @@ class StateStatsEnricherTest {
                 sourceStats = CheckpointMessage.Stats(recordCount = 200),
                 checkpoints = listOf(checkpoint1, checkpoint2),
                 additionalProperties = emptyMap(),
-                serializedSizeBytes = 2048
+                serializedSizeBytes = 2048,
             )
         val stateKey =
             StateKey(
                 id = 2L,
                 partitionKeys =
-                    listOf(PartitionKey(Fixtures.PARTITION1), PartitionKey(Fixtures.PARTITION2))
+                    listOf(PartitionKey(Fixtures.PARTITION1), PartitionKey(Fixtures.PARTITION2)),
             )
 
         val mappedDescriptor1 = DestinationStream.Descriptor(Fixtures.NAMESPACE1, Fixtures.NAME1)
@@ -109,12 +117,12 @@ class StateStatsEnricherTest {
         val commitStatsResult1 =
             CommitStatsResult(
                 committedStats = EmissionStats(count = 30, bytes = 300),
-                cumulativeStats = EmissionStats(count = 100, bytes = 1000)
+                cumulativeStats = EmissionStats(count = 100, bytes = 1000),
             )
         val commitStatsResult2 =
             CommitStatsResult(
                 committedStats = EmissionStats(count = 70, bytes = 700),
-                cumulativeStats = EmissionStats(count = 200, bytes = 2000)
+                cumulativeStats = EmissionStats(count = 200, bytes = 2000),
             )
 
         every { namespaceMapper.map(Fixtures.NAMESPACE1, Fixtures.NAME1) } returns mappedDescriptor1
@@ -140,7 +148,7 @@ class StateStatsEnricherTest {
             CheckpointMessage.Checkpoint(
                 unmappedNamespace = Fixtures.NAMESPACE1,
                 unmappedName = Fixtures.NAME1,
-                state = null
+                state = null,
             )
         val globalSnapshotCheckpoint =
             GlobalSnapshotCheckpoint(
@@ -149,7 +157,7 @@ class StateStatsEnricherTest {
                 checkpoints = listOf(checkpoint),
                 additionalProperties = emptyMap(),
                 serializedSizeBytes = 3072,
-                streamCheckpoints = emptyMap()
+                streamCheckpoints = emptyMap(),
             )
         val stateKey = StateKey(id = 3L, partitionKeys = listOf(PartitionKey(Fixtures.PARTITION3)))
 
@@ -157,7 +165,7 @@ class StateStatsEnricherTest {
         val commitStatsResult =
             CommitStatsResult(
                 committedStats = EmissionStats(count = 150, bytes = 1500),
-                cumulativeStats = EmissionStats(count = 450, bytes = 4500)
+                cumulativeStats = EmissionStats(count = 450, bytes = 4500),
             )
 
         every { namespaceMapper.map(Fixtures.NAMESPACE1, Fixtures.NAME1) } returns mappedDescriptor
@@ -174,11 +182,20 @@ class StateStatsEnricherTest {
 
     @Test
     fun `#enrichTopLevelDestinationStats`() {
+        val partitionKeys =
+            listOf(PartitionKey(Fixtures.PARTITION1), PartitionKey(Fixtures.PARTITION2))
+        val stream = DestinationStream.Descriptor(namespace = "namespace", name = "name")
         val checkpoint = mockk<CheckpointMessage>(relaxed = true)
         val sourceStats = CheckpointMessage.Stats(recordCount = 100)
         every { checkpoint.sourceStats } returns sourceStats
 
-        val result = stateStatsEnricher.enrichTopLevelDestinationStats(checkpoint, 50L)
+        val result =
+            stateStatsEnricher.enrichTopLevelDestinationStats(
+                checkpoint,
+                stream,
+                partitionKeys,
+                50L,
+            )
 
         assertEquals(checkpoint, result)
         verify { checkpoint.updateStats(destinationStats = sourceStats) }
@@ -204,7 +221,7 @@ class StateStatsEnricherTest {
             CheckpointMessage.Checkpoint(
                 unmappedNamespace = unmappedNamespace,
                 unmappedName = unmappedName,
-                state = null
+                state = null,
             )
         val stats = CheckpointMessage.Stats(recordCount = 75)
         val streamCheckpoint = mockk<StreamCheckpoint>(relaxed = true)
@@ -215,7 +232,7 @@ class StateStatsEnricherTest {
         val commitStatsResult =
             CommitStatsResult(
                 committedStats = EmissionStats(count = 25, bytes = 250),
-                cumulativeStats = EmissionStats(count = 75, bytes = 750)
+                cumulativeStats = EmissionStats(count = 75, bytes = 750),
             )
 
         every { namespaceMapper.map(unmappedNamespace, unmappedName) } returns mappedDescriptor
@@ -257,7 +274,7 @@ class StateStatsEnricherTest {
                     listOf(
                         PartitionKey(Fixtures.PARTITION1),
                         PartitionKey(Fixtures.PARTITION2),
-                    )
+                    ),
             )
 
         val mappedDescriptor1 = DestinationStream.Descriptor(null, Fixtures.NAME1)
@@ -266,12 +283,12 @@ class StateStatsEnricherTest {
         val commitStatsResult1 =
             CommitStatsResult(
                 committedStats = EmissionStats(count = 100, bytes = 1000),
-                cumulativeStats = EmissionStats(count = 300, bytes = 3000)
+                cumulativeStats = EmissionStats(count = 300, bytes = 3000),
             )
         val commitStatsResult2 =
             CommitStatsResult(
                 committedStats = EmissionStats(count = 200, bytes = 2000),
-                cumulativeStats = EmissionStats(count = 600, bytes = 6000)
+                cumulativeStats = EmissionStats(count = 600, bytes = 6000),
             )
 
         every { namespaceMapper.map(null, Fixtures.NAME1) } returns mappedDescriptor1

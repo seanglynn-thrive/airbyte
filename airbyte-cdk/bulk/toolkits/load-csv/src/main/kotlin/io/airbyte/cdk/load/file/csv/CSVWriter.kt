@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.file.csv
@@ -16,10 +16,10 @@ import org.apache.commons.csv.QuoteMode
 @Suppress("DEPRECATION")
 fun ObjectType.toCsvPrinterWithHeader(
     outputStream: OutputStream,
-    csvSettings: CSVFormat = CSVFormat.DEFAULT.withQuoteMode(QuoteMode.NON_NUMERIC)
+    csvSettings: CSVFormat = CSVFormat.DEFAULT.withQuoteMode(QuoteMode.NON_NUMERIC),
 ): CSVPrinter {
     return CSVPrinter(
         PrintWriter(outputStream, true, StandardCharsets.UTF_8),
-        csvSettings.withHeader(*toCsvHeader())
+        csvSettings.withHeader(*toCsvHeader()),
     )
 }

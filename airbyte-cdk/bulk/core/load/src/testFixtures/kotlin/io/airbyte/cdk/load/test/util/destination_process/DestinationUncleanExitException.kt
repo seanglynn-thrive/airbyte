@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.test.util.destination_process
@@ -21,9 +21,10 @@ class DestinationUncleanExitException(
         """
         Connector process exited uncleanly: $exitCode
         Trace messages:
-        """.trimIndent()
+        """
+            .trimIndent()
         // explicit concat because otherwise trimIndent behaves badly
-        + traceMessages
+        + traceMessages,
     ) {
     companion object {
         // generic type erasure strikes again >.>

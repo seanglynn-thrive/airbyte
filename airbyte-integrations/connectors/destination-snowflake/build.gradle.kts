@@ -7,7 +7,7 @@ plugins {
 
 airbyteBulkConnector {
     core = "load"
-    toolkits = listOf("load-db")
+    toolkits = listOf("load-csv", "load-fusion")
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -23,6 +23,7 @@ application {
             "-XX:NativeMemoryTracking=detail",
             "-XX:+UnlockDiagnosticVMOptions",
             "-XX:GCLockerRetryAllocationCount=100",
+            "-Dnet.snowflake.jdbc.enableBouncyCastle=TRUE",
 //            "-XX:NativeMemoryTracking=detail",
 //            "-Djava.rmi.server.hostname=localhost",
 //            "-Dcom.sun.management.jmxremote=true",
@@ -38,21 +39,28 @@ val hikariCpVersion = "7.0.2"
 val junitVersion = "5.13.4"
 val junitPlatformVersion = "1.13.4"
 val snowflakeJdbcThinVersion = "3.26.1"
+val bouncyCastleVersion = "1.86"
 
 dependencies {
     implementation("net.snowflake:snowflake-jdbc-thin:$snowflakeJdbcThinVersion")
     implementation("com.zaxxer:HikariCP:$hikariCpVersion")
     implementation("com.google.guava:guava:32.1.1-jre")
     implementation("de.siegmar:fastcsv:4.0.0")
+    implementation("io.micronaut.cache:micronaut-cache-caffeine:4.3.1")
 
-    testImplementation("io.mockk:mockk:1.14.5")
+    constraints {
+        implementation("org.jsoup:jsoup:1.23.2") {
+            because("CVE-2026-75140: snowflake-jdbc-thin $snowflakeJdbcThinVersion pulls jsoup 1.15.3")
+        }
+    }
+
+    testImplementation("org.bouncycastle:bcpkix-jdk18on:$bouncyCastleVersion")
+    testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:$junitVersion")
     testRuntimeOnly("org.junit.platform:junit-platform-engine:$junitPlatformVersion")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:$junitPlatformVersion")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
 
-    integrationTestImplementation("com.zaxxer:HikariCP:$hikariCpVersion")
-    integrationTestImplementation("net.snowflake:snowflake-jdbc-thin:$snowflakeJdbcThinVersion")
     integrationTestImplementation(project(":airbyte-cdk:java:airbyte-cdk:airbyte-cdk-dependencies"))
 }

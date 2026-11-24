@@ -142,6 +142,10 @@ This source will generate an dataset with products (skinny), customers (fat) and
 
 None!
 
+## IP allow list
+
+If you use Airbyte Cloud and your organization restricts access to specific IPs, add the [Airbyte Cloud IP addresses](https://docs.airbyte.com/platform/operating-airbyte/ip-allowlist) to your allow list.
+
 ## Changelog
 
 <details>
@@ -149,6 +153,13 @@ None!
 
 | Version | Date       | Pull Request                                             | Subject                  |
 |:--------|:-----------|:---------------------------------------------------------|:-------------------------|
+| 0.0.50 | 2026-11-17 | [91563](https://github.com/airbytehq/airbyte/pull/91563) | Update dependencies |
+| 0.0.49 | 2026-11-03 | [90588](https://github.com/airbytehq/airbyte/pull/90588) | Update dependencies |
+| 0.0.48 | 2026-10-27 | [78746](https://github.com/airbytehq/airbyte/pull/78746) | Update dependencies |
+| 0.0.47 | 2026-10-20 | [89548](https://github.com/airbytehq/airbyte/pull/89548) | Upgrade to airbyte-cdk 7 and Python 3.13 base image |
+| 0.0.46 | 2025-10-21 | [68285](https://github.com/airbytehq/airbyte/pull/68285) | Update dependencies |
+| 0.0.45 | 2025-10-14 | [67921](https://github.com/airbytehq/airbyte/pull/67921) | Update dependencies |
+| 0.0.44 | 2025-10-07 | [67413](https://github.com/airbytehq/airbyte/pull/67413) | Update dependencies |
 | 0.0.43 | 2025-09-30 | [66824](https://github.com/airbytehq/airbyte/pull/66824) | Update dependencies |
 | 0.0.42 | 2025-07-12 | [63159](https://github.com/airbytehq/airbyte/pull/63159) | Update dependencies |
 | 0.0.41 | 2025-05-17 | [60722](https://github.com/airbytehq/airbyte/pull/60722) | Update dependencies |

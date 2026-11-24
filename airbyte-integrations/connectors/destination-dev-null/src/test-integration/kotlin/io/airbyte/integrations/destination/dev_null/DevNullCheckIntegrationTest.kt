@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.dev_null
@@ -22,9 +22,11 @@ class DevNullCheckIntegrationTest :
                 // when trying to parse the config
                 CheckTestConfig(
                     DevNullTestUtils.loggingConfigPath.toFile().readText(),
-                    setOf(FeatureFlag.AIRBYTE_CLOUD_DEPLOYMENT)
+                    setOf(FeatureFlag.AIRBYTE_CLOUD_DEPLOYMENT),
                 ) to
-                    Pattern.compile("failed to map valid json to class .*DevNullSpecificationCloud")
+                    Pattern.compile(
+                        "failed to map valid json to class .*DevNullSpecificationCloud",
+                    ),
             ),
     ) {
 

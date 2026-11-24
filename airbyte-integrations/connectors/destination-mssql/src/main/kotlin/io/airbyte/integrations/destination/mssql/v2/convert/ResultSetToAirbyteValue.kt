@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.integrations.destination.mssql.v2.convert
@@ -102,10 +102,10 @@ class ResultSetToAirbyteValue {
             TimeWithTimezoneValue(
                 OffsetDateTime.parse(
                         this,
-                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSS XXX")
+                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSS XXX"),
                     )
                     .toOffsetTime()
-                    .toString()
+                    .toString(),
             )
 
         internal fun String.toTimeWithoutTimezone(): TimeWithoutTimezoneValue =
@@ -115,9 +115,9 @@ class ResultSetToAirbyteValue {
             TimestampWithTimezoneValue(
                 OffsetDateTime.parse(
                         this,
-                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSS XXX")
+                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSS XXX"),
                     )
-                    .toString()
+                    .toString(),
             )
 
         internal fun String.toTimestampWithoutTimezone(): TimestampWithoutTimezoneValue =

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 package io.airbyte.commons.features
 
@@ -36,7 +36,7 @@ interface FeatureFlags {
      * takes precedence over the normalization version in destination_definitions.yaml.
      *
      * @return a comma-separated list of workspace ids where strict incremental comparison should be
-     * enabled in normalization.
+     *   enabled in normalization.
      */
     fun strictComparisonNormalizationWorkspaces(): String?
 

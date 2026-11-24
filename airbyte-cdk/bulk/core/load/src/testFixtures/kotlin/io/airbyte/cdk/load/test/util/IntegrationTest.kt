@@ -1,10 +1,9 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.load.test.util
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
 import io.airbyte.cdk.command.ConfigurationSpecification
 import io.airbyte.cdk.load.command.DestinationCatalog
 import io.airbyte.cdk.load.command.DestinationStream
@@ -14,12 +13,11 @@ import io.airbyte.cdk.load.config.DataChannelFormat
 import io.airbyte.cdk.load.config.DataChannelMedium
 import io.airbyte.cdk.load.config.NamespaceDefinitionType
 import io.airbyte.cdk.load.config.NamespaceMappingConfig
-import io.airbyte.cdk.load.message.DestinationRecordStreamComplete
+import io.airbyte.cdk.load.data.ObjectType
 import io.airbyte.cdk.load.message.InputMessage
 import io.airbyte.cdk.load.message.InputMessageOther
 import io.airbyte.cdk.load.message.InputRecord
 import io.airbyte.cdk.load.message.InputStreamCheckpoint
-import io.airbyte.cdk.load.message.InputStreamComplete
 import io.airbyte.cdk.load.message.StreamCheckpoint
 import io.airbyte.cdk.load.test.util.destination_process.DestinationProcessFactory
 import io.airbyte.cdk.load.test.util.destination_process.DestinationUncleanExitException
@@ -28,13 +26,16 @@ import io.airbyte.protocol.models.v0.AirbyteAnalyticsTraceMessage
 import io.airbyte.protocol.models.v0.AirbyteErrorTraceMessage
 import io.airbyte.protocol.models.v0.AirbyteMessage
 import io.airbyte.protocol.models.v0.AirbyteStateMessage
+import io.airbyte.protocol.models.v0.AirbyteStreamStatusTraceMessage
 import io.airbyte.protocol.models.v0.AirbyteStreamStatusTraceMessage.AirbyteStreamStatus
 import io.airbyte.protocol.models.v0.AirbyteTraceMessage
+import io.airbyte.protocol.models.v0.StreamDescriptor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.LinkedHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertEquals
@@ -61,7 +62,6 @@ import uk.org.webcompere.systemstubs.jupiter.SystemStubsExtension
 // Spotbugs doesn't let you suppress the actual lateinit property,
 // so we have to suppress the entire class.
 // Thanks, spotbugs.
-@SuppressFBWarnings("NP_NONNULL_RETURN_VIOLATION", justification = "Micronaut DI")
 @ExtendWith(SystemStubsExtension::class)
 abstract class IntegrationTest(
     additionalMicronautEnvs: List<String>,
@@ -75,19 +75,15 @@ abstract class IntegrationTest(
     val configUpdater: ConfigurationUpdater = FakeConfigurationUpdater,
     val micronautProperties: Map<Property, String> = emptyMap(),
     val dataChannelMedium: DataChannelMedium = DataChannelMedium.STDIO,
-    val dataChannelFormat: DataChannelFormat = DataChannelFormat.PROTOBUF
+    val dataChannelFormat: DataChannelFormat = DataChannelFormat.PROTOBUF,
 ) {
     // Intentionally don't inject the actual destination process - we need a full factory
     // because some tests want to run multiple syncs, so we need to run the destination
     // multiple times.
     val destinationProcessFactory = DestinationProcessFactory.get(additionalMicronautEnvs)
 
-    @Suppress("DEPRECATION") private val randomSuffix = RandomStringUtils.randomAlphabetic(4)
-    private val timestampString =
-        LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC)
-            .format(randomizedNamespaceDateFormatter)
     // stream name doesn't need to be randomized, only the namespace.
-    val randomizedNamespace = "test$timestampString$randomSuffix"
+    val randomizedNamespace = generateRandomNamespace()
 
     // junit is a bit wonky with injecting TestInfo.
     // You can declare it as a constructor param, but you get a TestInfo instance
@@ -129,7 +125,8 @@ abstract class IntegrationTest(
                 Cleaners detected:
                   $destinationCleaner
                   ${cleanerSeen.get()}
-                """.trimIndent()
+                """
+                    .trimIndent(),
             )
         }
     }
@@ -144,8 +141,10 @@ abstract class IntegrationTest(
         allowUnexpectedRecord: Boolean = false,
     ) {
         val actualRecords: List<OutputRecord> = dataDumper.dumpRecords(config, stream)
-        val expectedRecords: List<OutputRecord> =
-            canonicalExpectedRecords.map { recordMangler.mapRecord(it, stream.schema) }
+        val schema = ObjectType(LinkedHashMap(stream.tableSchema.columnSchema.inputSchema))
+        val expectedRecords: List<OutputRecord> = canonicalExpectedRecords.map {
+            recordMangler.mapRecord(it, schema)
+        }
         val descriptor = recordMangler.mapStreamDescriptor(stream.mappedDescriptor)
 
         RecordDiffer(
@@ -197,6 +196,7 @@ abstract class IntegrationTest(
         streamStatus: AirbyteStreamStatus? = AirbyteStreamStatus.COMPLETE,
         useFileTransfer: Boolean = false,
         destinationProcessFactory: DestinationProcessFactory = this.destinationProcessFactory,
+        useSingleSocket: Boolean = false,
     ): List<AirbyteMessage> =
         runSync(
             configContents,
@@ -205,6 +205,7 @@ abstract class IntegrationTest(
             streamStatus,
             useFileTransfer = useFileTransfer,
             destinationProcessFactory,
+            useSingleSocket = useSingleSocket,
         )
 
     /**
@@ -222,6 +223,7 @@ abstract class IntegrationTest(
          * If you set this to anything other than `COMPLETE`, you may run into a race condition.
          * It's recommended that you send an explicit state message in [messages], and run the sync
          * in a loop until it acks the state message, e.g.
+         *
          * ```
          * while (true) {
          *   val e = assertThrows<DestinationUncleanExitException> {
@@ -242,61 +244,35 @@ abstract class IntegrationTest(
         useFileTransfer: Boolean = false,
         destinationProcessFactory: DestinationProcessFactory = this.destinationProcessFactory,
         namespaceMappingConfig: NamespaceMappingConfig? = null,
-    ): List<AirbyteMessage> {
-        check(streamStatus == null || streamStatus == AirbyteStreamStatus.COMPLETE) {
-            "Invalid stream status: $streamStatus"
-        }
-        destinationProcessFactory.testName = testPrettyName
-
-        val destination =
-            destinationProcessFactory.createDestinationProcess(
-                "write",
-                configContents,
-                catalog.asProtocolObject(),
-                useFileTransfer = useFileTransfer,
-                micronautProperties = micronautProperties,
-                dataChannelMedium = dataChannelMedium,
-                dataChannelFormat = dataChannelFormat,
-                namespaceMappingConfig = namespaceMappingConfig
-                        ?: NamespaceMappingConfig(
-                            NamespaceDefinitionType.SOURCE,
-                        ),
-            )
-        return runBlocking(Dispatchers.IO) {
-            launch { destination.run() }
-            messages.forEach { destination.sendMessage(it) }
-            if (streamStatus != null) {
-                catalog.streams.forEach {
-                    val streamStatusMessage =
-                        when (streamStatus) {
-                            AirbyteStreamStatus.COMPLETE ->
-                                InputStreamComplete(
-                                    DestinationRecordStreamComplete(it, System.currentTimeMillis())
-                                )
-                            else ->
-                                throw IllegalStateException(
-                                    "Impossible: We checked that the stream status was valid at the start of this method. Somehow got $streamStatus."
-                                )
-                        }
-                    destination.sendMessage(
-                        streamStatusMessage,
-                        broadcast = true,
-                    )
-                }
-            }
-            destination.shutdown()
-            if (useFileTransfer) {
-                destination.verifyFileDeleted()
-            }
-            destination.readMessages()
-        }
-    }
+        useSingleSocket: Boolean = false,
+    ): List<AirbyteMessage> =
+        destinationProcessFactory.runSync(
+            configContents,
+            catalog,
+            messages,
+            testPrettyName,
+            dataChannelMedium,
+            dataChannelFormat,
+            streamStatus,
+            useFileTransfer,
+            namespaceMappingConfig,
+            micronautProperties,
+            useSingleSocket,
+        )
 
     enum class UncleanSyncEndBehavior {
         /**
-         * End the sync normally (i.e. by closing stdin), but don't send a COMPLETE status message.
+         * End the sync normally (i.e. by signaling end-of-input on the data channel), but don't
+         * send a COMPLETE status message.
          */
         TERMINATE_WITH_NO_STREAM_STATUS,
+
+        /**
+         * Emit a STREAM_STATUS: INCOMPLETE trace for the stream, then signal end-of-input on the
+         * data channel. Simulates a source that failed mid-sync; in SOCKET mode this trace reaches
+         * the destination directly (the orchestrator does not filter it).
+         */
+        EMIT_STREAM_INCOMPLETE,
 
         // TODO no test actually uses this right now, should we just remove it?
         UNPARSEABLE_MESSAGE,
@@ -351,9 +327,9 @@ abstract class IntegrationTest(
                             AirbyteTraceMessage()
                                 .withType(AirbyteTraceMessage.Type.ANALYTICS)
                                 .withAnalytics(
-                                    AirbyteAnalyticsTraceMessage().withType("foo").withValue("bar")
+                                    AirbyteAnalyticsTraceMessage().withType("foo").withValue("bar"),
                                 )
-                                .withEmittedAt(System.currentTimeMillis().toDouble())
+                                .withEmittedAt(System.currentTimeMillis().toDouble()),
                         )
 
                 while (true) {
@@ -373,6 +349,30 @@ abstract class IntegrationTest(
                 }
                 when (syncEndBehavior) {
                     UncleanSyncEndBehavior.TERMINATE_WITH_NO_STREAM_STATUS -> destination.shutdown()
+                    UncleanSyncEndBehavior.EMIT_STREAM_INCOMPLETE -> {
+                        val incompleteTrace =
+                            AirbyteMessage()
+                                .withType(AirbyteMessage.Type.TRACE)
+                                .withTrace(
+                                    AirbyteTraceMessage()
+                                        .withType(AirbyteTraceMessage.Type.STREAM_STATUS)
+                                        .withEmittedAt(System.currentTimeMillis().toDouble())
+                                        .withStreamStatus(
+                                            AirbyteStreamStatusTraceMessage()
+                                                .withStreamDescriptor(
+                                                    StreamDescriptor()
+                                                        .withNamespace(stream.unmappedNamespace)
+                                                        .withName(stream.unmappedName),
+                                                )
+                                                .withStatus(AirbyteStreamStatus.INCOMPLETE),
+                                        ),
+                                )
+                        destination.sendMessage(
+                            InputMessageOther(incompleteTrace),
+                            broadcast = true,
+                        )
+                        destination.shutdown()
+                    }
                     UncleanSyncEndBehavior.UNPARSEABLE_MESSAGE -> {
                         destination.sendMessage("{\"unparseable")
                         destination.shutdown()
@@ -405,6 +405,16 @@ abstract class IntegrationTest(
         val randomizedNamespaceRegex = Regex("test(\\d{8})[A-Za-z]{4}.*")
         val randomizedNamespaceDateFormatter: DateTimeFormatter =
             DateTimeFormatter.ofPattern("yyyyMMdd")
+
+        fun generateRandomNamespace(): String {
+            @Suppress("DEPRECATION")
+            val randomSuffix = RandomStringUtils.randomAlphabetic(4).lowercase()
+            val timestampString =
+                LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC)
+                    .format(randomizedNamespaceDateFormatter)
+            // stream name doesn't need to be randomized, only the namespace.
+            return "test$timestampString$randomSuffix"
+        }
 
         /**
          * When set, this property forces the CDK to invoke processRecords once per record. This

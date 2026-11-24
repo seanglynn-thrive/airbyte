@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 package io.airbyte.cdk.test.fixtures.legacy
 
@@ -11,6 +11,7 @@ abstract class BaseConnector : Integration {
     val isCloudDeployment
         get() =
             AdaptiveSourceRunner.CLOUD_MODE.equals(featureFlags.deploymentMode(), ignoreCase = true)
+
     /**
      * By convention the spec is stored as a resource for java connectors. That resource is called
      * spec.json.

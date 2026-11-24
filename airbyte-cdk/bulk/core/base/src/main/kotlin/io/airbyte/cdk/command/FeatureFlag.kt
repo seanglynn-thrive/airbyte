@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Airbyte, Inc., all rights reserved.
+ * Copyright (c) 2026 Airbyte, Inc., all rights reserved.
  */
 
 package io.airbyte.cdk.command
@@ -18,13 +18,13 @@ enum class FeatureFlag(
     val micronautEnvironmentName: String,
     val envVar: EnvVar,
     val requiredEnvVarValue: String,
-    private val transformActualValue: (String) -> String = { it }
+    private val transformActualValue: (String) -> String = { it },
 ) {
 
     /** [AIRBYTE_CLOUD_DEPLOYMENT] is active when the connector is running in Airbyte Cloud. */
     AIRBYTE_CLOUD_DEPLOYMENT(
         micronautEnvironmentName = AIRBYTE_CLOUD_ENV,
-        envVar = EnvVar.DEPLOYMENT_MODE,
+        envVar = EnvVar.AIRBYTE_EDITION,
         requiredEnvVarValue = "CLOUD",
         transformActualValue = { it.trim().uppercase() },
     );
@@ -34,7 +34,7 @@ enum class FeatureFlag(
         get() = "${envVar.name}=$requiredEnvVarValue"
 
     enum class EnvVar(val defaultValue: String = "") {
-        DEPLOYMENT_MODE
+        AIRBYTE_EDITION,
     }
 
     companion object {
@@ -55,7 +55,7 @@ enum class FeatureFlag(
                 addAll(
                     FeatureFlag.entries.filter {
                         environment.activeNames.contains(it.micronautEnvironmentName)
-                    }
+                    },
                 )
             }
     }
